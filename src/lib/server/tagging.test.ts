@@ -5,11 +5,29 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
  * Anthropic SDK 本身用 mock 取代，測試不會真的打 API。
  */
 const parse = vi.fn()
-vi.mock('@anthropic-ai/sdk', () => ({
-  default: class {
+
+// 模擬 SDK 的錯誤類別，驗證我們把它們轉成看得懂的訊息
+class FakeAPIError extends Error {
+  status: number
+  constructor(status: number, message: string) {
+    super(message)
+    this.status = status
+  }
+}
+class FakeAuthError extends FakeAPIError {}
+class FakeRateLimitError extends FakeAPIError {}
+class FakeNotFoundError extends FakeAPIError {}
+
+vi.mock('@anthropic-ai/sdk', () => {
+  class FakeAnthropic {
     messages = { parse }
-  },
-}))
+    static APIError = FakeAPIError
+    static AuthenticationError = FakeAuthError
+    static RateLimitError = FakeRateLimitError
+    static NotFoundError = FakeNotFoundError
+  }
+  return { default: FakeAnthropic }
+})
 vi.mock('./config', () => ({
   ANTHROPIC_API_KEY: 'test-key',
   ANTHROPIC_MODEL: 'claude-opus-5',
@@ -79,5 +97,32 @@ describe('自動標籤', () => {
 
     parse.mockResolvedValue({ stop_reason: 'end_turn', parsed_output: null })
     await expect(suggestTags(['內容'])).rejects.toBeInstanceOf(TaggingError)
+  })
+})
+
+describe('錯誤訊息', () => {
+  it('金鑰無效時講清楚是金鑰的問題', async () => {
+    parse.mockRejectedValue(new FakeAuthError(401, 'invalid x-api-key'))
+    await expect(suggestTags(['內容'])).rejects.toThrow(/ANTHROPIC_API_KEY/)
+  })
+
+  it('模型名稱錯誤時點名 ANTHROPIC_MODEL', async () => {
+    parse.mockRejectedValue(new FakeNotFoundError(404, 'model not found'))
+    await expect(suggestTags(['內容'])).rejects.toThrow(/ANTHROPIC_MODEL/)
+  })
+
+  it('被限流時說明是限流', async () => {
+    parse.mockRejectedValue(new FakeRateLimitError(429, 'rate limited'))
+    await expect(suggestTags(['內容'])).rejects.toThrow(/限流/)
+  })
+
+  it('其他 API 錯誤帶上狀態碼與訊息', async () => {
+    parse.mockRejectedValue(new FakeAPIError(400, 'output_config.effort is not supported'))
+    await expect(suggestTags(['內容'])).rejects.toThrow(/400.*effort/)
+  })
+
+  it('非 API 的例外也帶得出訊息', async () => {
+    parse.mockRejectedValue(new Error('boom'))
+    await expect(suggestTags(['內容'])).rejects.toThrow(/boom/)
   })
 })

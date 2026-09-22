@@ -2,6 +2,7 @@ import 'server-only'
 import { NextResponse } from 'next/server'
 import { EmbeddingError } from './embedding'
 import { StoreError } from './notes'
+import { TaggingError } from './tagging'
 import { UnauthenticatedError } from './session'
 
 /** 把各層的錯誤轉成前端可以直接顯示的訊息。 */
@@ -14,6 +15,13 @@ export function errorResponse(error: unknown): NextResponse {
     console.error('embedding 失敗', error)
     return NextResponse.json(
       { error: '轉換向量失敗，請稍後再試。', detail: error.message },
+      { status: 502 },
+    )
+  }
+  if (error instanceof TaggingError) {
+    console.error('標籤失敗', error)
+    return NextResponse.json(
+      { error: '產生標籤失敗，請稍後再試。', detail: error.message },
       { status: 502 },
     )
   }

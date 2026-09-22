@@ -31,6 +31,23 @@ const SYSTEM_PROMPT = `你是一個筆記整理助手。使用者會給你數則
   （已有「理財」就不要再造「財務」「金錢管理」）。真的沒有合適的才新增。
 - 每則都要回，用 index 對應輸入的編號。`
 
+/** 把 SDK 的錯誤轉成帶得出原因的 TaggingError（由具體到一般） */
+function asTaggingError(error: unknown): TaggingError {
+  if (error instanceof Anthropic.AuthenticationError) {
+    return new TaggingError(`ANTHROPIC_API_KEY 無效或沒有權限：${error.message}`)
+  }
+  if (error instanceof Anthropic.RateLimitError) {
+    return new TaggingError(`Anthropic 限流，請稍後再試：${error.message}`)
+  }
+  if (error instanceof Anthropic.NotFoundError) {
+    return new TaggingError(`找不到模型 ${ANTHROPIC_MODEL}，請確認 ANTHROPIC_MODEL：${error.message}`)
+  }
+  if (error instanceof Anthropic.APIError) {
+    return new TaggingError(`Anthropic 回應 ${error.status}：${error.message}`)
+  }
+  return new TaggingError(error instanceof Error ? error.message : String(error))
+}
+
 function client(): Anthropic {
   if (!ANTHROPIC_API_KEY) throw new TaggingError('未設定 ANTHROPIC_API_KEY')
   return new Anthropic({ apiKey: ANTHROPIC_API_KEY })
@@ -64,14 +81,19 @@ export async function suggestTags(
 ): Promise<string[][]> {
   if (contents.length === 0) return []
 
-  const response = await client().messages.parse({
-    model: ANTHROPIC_MODEL,
-    max_tokens: 4000,
-    // 標籤屬於分類任務，低 effort 就夠，也讓背景標籤不會拖太久
-    output_config: { effort: 'low', format: zodOutputFormat(TaggedNotesSchema) },
-    system: SYSTEM_PROMPT,
-    messages: [{ role: 'user', content: buildPrompt(contents, vocabulary) }],
-  })
+  let response
+  try {
+    response = await client().messages.parse({
+      model: ANTHROPIC_MODEL,
+      max_tokens: 4000,
+      // 標籤屬於分類任務，低 effort 就夠，也讓背景標籤不會拖太久
+      output_config: { effort: 'low', format: zodOutputFormat(TaggedNotesSchema) },
+      system: SYSTEM_PROMPT,
+      messages: [{ role: 'user', content: buildPrompt(contents, vocabulary) }],
+    })
+  } catch (error) {
+    throw asTaggingError(error)
+  }
 
   if (response.stop_reason === 'refusal') {
     throw new TaggingError('模型拒絕處理這批筆記')
