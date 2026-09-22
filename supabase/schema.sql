@@ -5,7 +5,14 @@
 -- 在 Supabase Dashboard → SQL Editor 貼上執行一次即可。
 -- ============================================================
 
-create extension if not exists vector;
+-- pgvector 在 Supabase 裝在 extensions schema（不是 public）。
+-- 下面兩行讓「已經裝好」與「還沒裝」兩種情況都相容。
+create schema if not exists extensions;
+create extension if not exists vector with schema extensions;
+
+-- 後面的 DDL 才找得到 vector 型別與 <=> 運算子。
+-- search_path 裡不存在的 schema 會被忽略，所以在一般 PostgreSQL 上也安全。
+set search_path = public, extensions;
 
 create table if not exists notes (
   id         uuid primary key default gen_random_uuid(),
@@ -53,7 +60,9 @@ returns table (
 language sql
 stable
 security invoker
-set search_path = public
+-- 一定要包含 extensions：<=> 運算子在那裡，只寫 public 會出現
+-- "operator does not exist: extensions.vector <=> extensions.vector"
+set search_path = public, extensions
 as $$
   select
     notes.id,
