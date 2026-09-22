@@ -13,8 +13,9 @@ import (
 )
 
 type memoryRecord struct {
-	note   note.Note
-	vector []float32
+	ownerID string
+	note    note.Note
+	vector  []float32
 }
 
 // Memory 只存在行程記憶體中，重啟即消失，僅供本機開發。
@@ -25,7 +26,7 @@ type Memory struct {
 
 func NewMemory() *Memory { return &Memory{} }
 
-func (m *Memory) Create(_ context.Context, content string, vector []float32) (note.Note, error) {
+func (m *Memory) Create(_ context.Context, ownerID, content string, vector []float32) (note.Note, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
@@ -36,16 +37,19 @@ func (m *Memory) Create(_ context.Context, content string, vector []float32) (no
 	}
 	stored := make([]float32, len(vector))
 	copy(stored, vector)
-	m.records = append(m.records, memoryRecord{note: created, vector: stored})
+	m.records = append(m.records, memoryRecord{ownerID: ownerID, note: created, vector: stored})
 	return created, nil
 }
 
-func (m *Memory) Search(_ context.Context, vector []float32, limit int) ([]note.SearchHit, error) {
+func (m *Memory) Search(_ context.Context, ownerID string, vector []float32, limit int) ([]note.SearchHit, error) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 
 	hits := make([]note.SearchHit, 0, len(m.records))
 	for _, record := range m.records {
+		if record.ownerID != ownerID {
+			continue
+		}
 		hits = append(hits, note.SearchHit{
 			Note:       record.note,
 			Similarity: cosine(vector, record.vector),
@@ -58,12 +62,15 @@ func (m *Memory) Search(_ context.Context, vector []float32, limit int) ([]note.
 	return hits, nil
 }
 
-func (m *Memory) List(_ context.Context, limit, offset int) ([]note.Note, error) {
+func (m *Memory) List(_ context.Context, ownerID string, limit, offset int) ([]note.Note, error) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 
 	sorted := make([]note.Note, 0, len(m.records))
 	for _, record := range m.records {
+		if record.ownerID != ownerID {
+			continue
+		}
 		sorted = append(sorted, record.note)
 	}
 	sort.SliceStable(sorted, func(i, j int) bool { return sorted[i].CreatedAt.After(sorted[j].CreatedAt) })

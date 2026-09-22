@@ -64,10 +64,11 @@ button, input, textarea { font: inherit; color: inherit; }
 .topbar {
   display: flex;
   align-items: center;
-  justify-content: space-between;
   gap: 12px;
   padding: 18px 0 20px;
 }
+
+.topbar .tabs { margin-left: auto; }
 
 .brand {
   font-size: 15px;
@@ -97,6 +98,58 @@ button, input, textarea { font: inherit; color: inherit; }
   border: 1px solid var(--border);
   color: var(--text);
   font-weight: 500;
+}
+
+/* 帳號（與 taskeel 同一組 Supabase 帳號） */
+.account {
+  max-width: 140px;
+  overflow: hidden;
+  padding: 4px 12px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--surface);
+  color: var(--text-muted);
+  font-size: 12.5px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.account:hover { border-color: var(--border-strong); color: var(--text); }
+
+/* ── 登入頁 ───────────────────────────────────────── */
+.login {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 80vh;
+}
+
+.login-card {
+  width: 100%;
+  max-width: 360px;
+  padding: 28px 24px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  text-align: center;
+}
+
+.login-card h1 { margin: 0; font-size: 20px; }
+
+.login-sub {
+  margin: 6px 0 22px;
+  color: var(--text-muted);
+  font-size: 13.5px;
+}
+
+.login-btn { width: 100%; justify-content: center; }
+
+.login-hint {
+  margin: 16px 0 0;
+  color: var(--text-subtle);
+  font-size: 12.5px;
 }
 
 /* ── 記錄頁 ───────────────────────────────────────── */

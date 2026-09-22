@@ -10,23 +10,28 @@ import (
 )
 
 // 兩種實作共用同一組行為測試，確保本機（記憶體）與正式（pgvector）語意一致。
+const (
+	alice = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"
+	bob   = "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb"
+)
+
 func runStoreContract(t *testing.T, newStore func(t *testing.T) note.Store) {
 	t.Helper()
 	ctx := context.Background()
 
 	t.Run("搜尋依相似度由高到低排序", func(t *testing.T) {
 		s := newStore(t)
-		if _, err := s.Create(ctx, "貓咪在曬太陽", []float32{1, 0, 0}); err != nil {
+		if _, err := s.Create(ctx, alice, "貓咪在曬太陽", []float32{1, 0, 0}); err != nil {
 			t.Fatal(err)
 		}
-		if _, err := s.Create(ctx, "會議記錄", []float32{0, 1, 0}); err != nil {
+		if _, err := s.Create(ctx, alice, "會議記錄", []float32{0, 1, 0}); err != nil {
 			t.Fatal(err)
 		}
-		if _, err := s.Create(ctx, "貓砂要補貨", []float32{0.8, 0.6, 0}); err != nil {
+		if _, err := s.Create(ctx, alice, "貓砂要補貨", []float32{0.8, 0.6, 0}); err != nil {
 			t.Fatal(err)
 		}
 
-		hits, err := s.Search(ctx, []float32{1, 0, 0}, 2)
+		hits, err := s.Search(ctx, alice, []float32{1, 0, 0}, 2)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -50,12 +55,12 @@ func runStoreContract(t *testing.T, newStore func(t *testing.T) note.Store) {
 	t.Run("列表依時間新到舊並支援分頁", func(t *testing.T) {
 		s := newStore(t)
 		for _, content := range []string{"第一則", "第二則", "第三則"} {
-			if _, err := s.Create(ctx, content, []float32{1, 0, 0}); err != nil {
+			if _, err := s.Create(ctx, alice, content, []float32{1, 0, 0}); err != nil {
 				t.Fatal(err)
 			}
 		}
 
-		page, err := s.List(ctx, 2, 0)
+		page, err := s.List(ctx, alice, 2, 0)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -63,7 +68,7 @@ func runStoreContract(t *testing.T, newStore func(t *testing.T) note.Store) {
 			t.Fatalf("第一頁應是最新兩則，得到 %+v", page)
 		}
 
-		second, err := s.List(ctx, 2, 2)
+		second, err := s.List(ctx, alice, 2, 2)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -72,9 +77,35 @@ func runStoreContract(t *testing.T, newStore func(t *testing.T) note.Store) {
 		}
 	})
 
+	t.Run("看不到其他使用者的筆記", func(t *testing.T) {
+		s := newStore(t)
+		if _, err := s.Create(ctx, alice, "Alice 的祕密", []float32{1, 0, 0}); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := s.Create(ctx, bob, "Bob 的筆記", []float32{1, 0, 0}); err != nil {
+			t.Fatal(err)
+		}
+
+		hits, err := s.Search(ctx, bob, []float32{1, 0, 0}, 10)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(hits) != 1 || hits[0].Content != "Bob 的筆記" {
+			t.Fatalf("搜尋只應看到自己的筆記，得到 %+v", hits)
+		}
+
+		listed, err := s.List(ctx, bob, 10, 0)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(listed) != 1 || listed[0].Content != "Bob 的筆記" {
+			t.Fatalf("列表只應看到自己的筆記，得到 %+v", listed)
+		}
+	})
+
 	t.Run("沒有資料時搜尋回空集合", func(t *testing.T) {
 		s := newStore(t)
-		hits, err := s.Search(ctx, []float32{1, 0, 0}, 5)
+		hits, err := s.Search(ctx, alice, []float32{1, 0, 0}, 5)
 		if err != nil {
 			t.Fatal(err)
 		}

@@ -61,15 +61,17 @@ func (p *Postgres) Migrate(ctx context.Context) error {
 	return nil
 }
 
-func (p *Postgres) Create(ctx context.Context, content string, vector []float32) (note.Note, error) {
+func (p *Postgres) Create(ctx context.Context, ownerID, content string, vector []float32) (note.Note, error) {
 	if len(vector) != p.dims {
 		return note.Note{}, fmt.Errorf("向量維度 %d 與資料表設定 %d 不符", len(vector), p.dims)
 	}
 
 	var created note.Note
 	err := p.pool.QueryRow(ctx,
-		`insert into notes (content, embedding) values ($1, $2::vector) returning id, content, created_at`,
-		content, vectorLiteral(vector),
+		`insert into notes (owner_id, content, embedding)
+		 values ($1, $2, $3::vector)
+		 returning id, content, created_at`,
+		ownerID, content, vectorLiteral(vector),
 	).Scan(&created.ID, &created.Content, &created.CreatedAt)
 	if err != nil {
 		return note.Note{}, fmt.Errorf("寫入筆記失敗：%w", err)
@@ -77,7 +79,7 @@ func (p *Postgres) Create(ctx context.Context, content string, vector []float32)
 	return created, nil
 }
 
-func (p *Postgres) Search(ctx context.Context, vector []float32, limit int) ([]note.SearchHit, error) {
+func (p *Postgres) Search(ctx context.Context, ownerID string, vector []float32, limit int) ([]note.SearchHit, error) {
 	if len(vector) != p.dims {
 		return nil, fmt.Errorf("向量維度 %d 與資料表設定 %d 不符", len(vector), p.dims)
 	}
@@ -86,9 +88,10 @@ func (p *Postgres) Search(ctx context.Context, vector []float32, limit int) ([]n
 	rows, err := p.pool.Query(ctx,
 		`select id, content, created_at, 1 - (embedding <=> $1::vector) as similarity
 		   from notes
+		  where owner_id = $2
 		  order by embedding <=> $1::vector
-		  limit $2`,
-		vectorLiteral(vector), limit,
+		  limit $3`,
+		vectorLiteral(vector), ownerID, limit,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("搜尋筆記失敗：%w", err)
@@ -106,10 +109,14 @@ func (p *Postgres) Search(ctx context.Context, vector []float32, limit int) ([]n
 	return hits, rows.Err()
 }
 
-func (p *Postgres) List(ctx context.Context, limit, offset int) ([]note.Note, error) {
+func (p *Postgres) List(ctx context.Context, ownerID string, limit, offset int) ([]note.Note, error) {
 	rows, err := p.pool.Query(ctx,
-		`select id, content, created_at from notes order by created_at desc, id desc limit $1 offset $2`,
-		limit, offset,
+		`select id, content, created_at
+		   from notes
+		  where owner_id = $1
+		  order by created_at desc, id desc
+		  limit $2 offset $3`,
+		ownerID, limit, offset,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("列出筆記失敗：%w", err)

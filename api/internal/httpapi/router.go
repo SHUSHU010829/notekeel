@@ -2,6 +2,7 @@
 package httpapi
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"log/slog"
@@ -10,6 +11,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/shushu010829/notekeel/api/internal/auth"
 	"github.com/shushu010829/notekeel/api/internal/note"
 )
 
@@ -17,11 +19,22 @@ import (
 type Options struct {
 	AllowedOrigins []string
 	Logger         *slog.Logger
+	// Verifier 驗證 Supabase 權杖；未指定時視為免登入的本機模式。
+	Verifier auth.Verifier
 }
 
 type handler struct {
-	svc    *note.Service
-	logger *slog.Logger
+	svc      *note.Service
+	logger   *slog.Logger
+	verifier auth.Verifier
+}
+
+// ownerKey 從 middleware 傳遞已驗證的使用者 id。
+type ownerKey struct{}
+
+func ownerFrom(ctx context.Context) string {
+	owner, _ := ctx.Value(ownerKey{}).(string)
+	return owner
 }
 
 // NewRouter 組出所有路由與中介層。
@@ -30,17 +43,50 @@ func NewRouter(svc *note.Service, opts Options) http.Handler {
 	if logger == nil {
 		logger = slog.Default()
 	}
-	h := &handler{svc: svc, logger: logger}
+	verifier := opts.Verifier
+	if verifier == nil {
+		verifier = auth.Dev{}
+	}
+	h := &handler{svc: svc, logger: logger, verifier: verifier}
 
 	mux := http.NewServeMux()
-	mux.HandleFunc("POST /api/notes", h.createNote)
-	mux.HandleFunc("GET /api/notes/search", h.searchNotes)
-	mux.HandleFunc("GET /api/notes", h.listNotes)
+	mux.Handle("POST /api/notes", h.authenticated(h.createNote))
+	mux.Handle("GET /api/notes/search", h.authenticated(h.searchNotes))
+	mux.Handle("GET /api/notes", h.authenticated(h.listNotes))
 	mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, _ *http.Request) {
 		writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
 	})
 
 	return withCORS(opts.AllowedOrigins, mux)
+}
+
+// authenticated 驗證 Authorization: Bearer <supabase access token>，
+// 把 auth.users.id 放進 context；本機模式下一律視為同一位使用者。
+func (h *handler) authenticated(next http.HandlerFunc) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		token := bearerToken(r)
+		if token == "" && h.verifier.Enabled() {
+			writeError(w, http.StatusUnauthorized, "請先登入")
+			return
+		}
+
+		ownerID, err := h.verifier.Verify(r.Context(), token)
+		if err != nil {
+			h.logger.Warn("權杖驗證失敗", "error", err)
+			writeError(w, http.StatusUnauthorized, "登入已過期，請重新登入")
+			return
+		}
+
+		next(w, r.WithContext(context.WithValue(r.Context(), ownerKey{}, ownerID)))
+	})
+}
+
+func bearerToken(r *http.Request) string {
+	header := r.Header.Get("Authorization")
+	if len(header) < 7 || !strings.EqualFold(header[:7], "bearer ") {
+		return ""
+	}
+	return strings.TrimSpace(header[7:])
 }
 
 type createNoteRequest struct {
@@ -54,7 +100,7 @@ func (h *handler) createNote(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	created, err := h.svc.Create(r.Context(), body.Content)
+	created, err := h.svc.Create(r.Context(), ownerFrom(r.Context()), body.Content)
 	switch {
 	case errors.Is(err, note.ErrEmptyContent):
 		writeError(w, http.StatusBadRequest, "筆記內容不可為空")
@@ -80,7 +126,7 @@ func (h *handler) searchNotes(w http.ResponseWriter, r *http.Request) {
 	query := r.URL.Query().Get("q")
 	limit := intParam(r, "limit", 0)
 
-	hits, err := h.svc.Search(r.Context(), query, limit)
+	hits, err := h.svc.Search(r.Context(), ownerFrom(r.Context()), query, limit)
 	switch {
 	case errors.Is(err, note.ErrEmptyQuery):
 		writeError(w, http.StatusBadRequest, "請輸入搜尋關鍵字")
@@ -99,7 +145,7 @@ type listResponse struct {
 }
 
 func (h *handler) listNotes(w http.ResponseWriter, r *http.Request) {
-	notes, err := h.svc.List(r.Context(), intParam(r, "limit", 0), intParam(r, "offset", 0))
+	notes, err := h.svc.List(r.Context(), ownerFrom(r.Context()), intParam(r, "limit", 0), intParam(r, "offset", 0))
 	if err != nil {
 		h.logger.Error("列出筆記失敗", "error", err)
 		writeError(w, http.StatusBadGateway, "讀取筆記失敗，請稍後再試")
@@ -149,7 +195,7 @@ func withCORS(allowed []string, next http.Handler) http.Handler {
 			w.Header().Add("Vary", "Origin")
 		}
 		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
-		w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
+		w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization")
 		w.Header().Set("Access-Control-Max-Age", strconv.Itoa(int((24 * time.Hour).Seconds())))
 
 		if r.Method == http.MethodOptions {

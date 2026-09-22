@@ -36,7 +36,10 @@ func (s *Service) WithMinSimilarity(min float64) *Service {
 }
 
 // Create 記下一則筆記：先轉成向量，再連同原文寫入資料庫。
-func (s *Service) Create(ctx context.Context, content string) (Note, error) {
+func (s *Service) Create(ctx context.Context, ownerID, content string) (Note, error) {
+	if ownerID == "" {
+		return Note{}, ErrNoOwner
+	}
 	content = strings.TrimSpace(content)
 	if content == "" {
 		return Note{}, ErrEmptyContent
@@ -53,11 +56,14 @@ func (s *Service) Create(ctx context.Context, content string) (Note, error) {
 		return Note{}, ErrNoEmbedding
 	}
 
-	return s.store.Create(ctx, content, vectors[0])
+	return s.store.Create(ctx, ownerID, content, vectors[0])
 }
 
 // Search 以語意相似度找回筆記。
-func (s *Service) Search(ctx context.Context, query string, limit int) ([]SearchHit, error) {
+func (s *Service) Search(ctx context.Context, ownerID, query string, limit int) ([]SearchHit, error) {
+	if ownerID == "" {
+		return nil, ErrNoOwner
+	}
 	query = strings.TrimSpace(query)
 	if query == "" {
 		return nil, ErrEmptyQuery
@@ -72,7 +78,7 @@ func (s *Service) Search(ctx context.Context, query string, limit int) ([]Search
 		return nil, ErrNoEmbedding
 	}
 
-	hits, err := s.store.Search(ctx, vectors[0], limit)
+	hits, err := s.store.Search(ctx, ownerID, vectors[0], limit)
 	if err != nil || s.minSimilarity <= 0 {
 		return hits, err
 	}
@@ -87,12 +93,15 @@ func (s *Service) Search(ctx context.Context, query string, limit int) ([]Search
 }
 
 // List 依時間新到舊列出筆記。
-func (s *Service) List(ctx context.Context, limit, offset int) ([]Note, error) {
+func (s *Service) List(ctx context.Context, ownerID string, limit, offset int) ([]Note, error) {
+	if ownerID == "" {
+		return nil, ErrNoOwner
+	}
 	limit = clamp(limit, DefaultListLimit, MaxListLimit)
 	if offset < 0 {
 		offset = 0
 	}
-	return s.store.List(ctx, limit, offset)
+	return s.store.List(ctx, ownerID, limit, offset)
 }
 
 func clamp(value, fallback, max int) int {

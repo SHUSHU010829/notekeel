@@ -11,6 +11,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/shushu010829/notekeel/api/internal/auth"
 	"github.com/shushu010829/notekeel/api/internal/config"
 	"github.com/shushu010829/notekeel/api/internal/embedding"
 	"github.com/shushu010829/notekeel/api/internal/httpapi"
@@ -44,8 +45,12 @@ func run(logger *slog.Logger) error {
 	service := note.NewService(noteStore, embedder).WithMinSimilarity(cfg.MinSimilarity)
 
 	server := &http.Server{
-		Addr:              ":" + cfg.Port,
-		Handler:           httpapi.NewRouter(service, httpapi.Options{AllowedOrigins: cfg.AllowedOrigins, Logger: logger}),
+		Addr: ":" + cfg.Port,
+		Handler: httpapi.NewRouter(service, httpapi.Options{
+			AllowedOrigins: cfg.AllowedOrigins,
+			Logger:         logger,
+			Verifier:       buildVerifier(cfg, logger),
+		}),
 		ReadHeaderTimeout: 10 * time.Second,
 		ReadTimeout:       30 * time.Second,
 		WriteTimeout:      60 * time.Second,
@@ -91,6 +96,18 @@ func buildStore(ctx context.Context, cfg config.Config, logger *slog.Logger) (no
 	}
 	logger.Info("已連上 PostgreSQL 並套用 migrations")
 	return pg, pg.Close, nil
+}
+
+func buildVerifier(cfg config.Config, logger *slog.Logger) auth.Verifier {
+	if !cfg.UsesSupabaseAuth() {
+		logger.Warn("未設定 SUPABASE_URL，所有請求都視為同一位使用者（僅供本機開發）")
+		return auth.Dev{}
+	}
+	logger.Info("啟用 Supabase 權杖驗證", "project", cfg.SupabaseURL)
+	return auth.NewSupabase(auth.SupabaseOptions{
+		ProjectURL: cfg.SupabaseURL,
+		JWTSecret:  cfg.SupabaseJWTSecret,
+	})
 }
 
 func buildEmbedder(cfg config.Config, logger *slog.Logger) note.Embedder {

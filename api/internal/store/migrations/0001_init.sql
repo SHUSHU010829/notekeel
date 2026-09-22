@@ -2,6 +2,9 @@ create extension if not exists vector;
 
 create table if not exists notes (
   id uuid primary key default gen_random_uuid(),
+  -- owner_id 對應 Supabase 的 auth.users.id（與 taskeel 同一組使用者）；
+  -- 外鍵與 RLS 在 0002 依環境決定是否掛上。
+  owner_id uuid,
   content text not null,
   embedding vector({{DIMENSIONS}}),
   created_at timestamptz not null default now()

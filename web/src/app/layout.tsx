@@ -1,5 +1,5 @@
 import type { Metadata, Viewport } from 'next'
-import { NavTabs } from '../components/NavTabs'
+import { AppHeader } from '../components/AppHeader'
 import './globals.css'
 
 export const metadata: Metadata = {
@@ -21,12 +21,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     <html lang="zh-Hant">
       <body>
         <div className="shell">
-          <header className="topbar">
-            <div className="brand">
-              隨手記 <span>notekeel</span>
-            </div>
-            <NavTabs />
-          </header>
+          <AppHeader />
           {children}
         </div>
       </body>
