@@ -9,13 +9,20 @@ export function errorResponse(error: unknown): NextResponse {
   if (error instanceof UnauthenticatedError) {
     return NextResponse.json({ error: '請先登入' }, { status: 401 })
   }
+  // detail 帶上底層訊息：這些端點都要登入才進得來，而少了它幾乎不可能除錯
   if (error instanceof EmbeddingError) {
     console.error('embedding 失敗', error)
-    return NextResponse.json({ error: '轉換向量失敗，請稍後再試。' }, { status: 502 })
+    return NextResponse.json(
+      { error: '轉換向量失敗，請稍後再試。', detail: error.message },
+      { status: 502 },
+    )
   }
   if (error instanceof StoreError) {
     console.error('資料庫操作失敗', error)
-    return NextResponse.json({ error: '資料庫忙線中，請稍後再試。' }, { status: 502 })
+    return NextResponse.json(
+      { error: '資料庫忙線中，請稍後再試。', detail: error.message },
+      { status: 502 },
+    )
   }
   console.error('未預期的錯誤', error)
   return NextResponse.json({ error: '發生未預期的錯誤，請稍後再試。' }, { status: 500 })

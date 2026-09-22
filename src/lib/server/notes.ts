@@ -15,6 +15,15 @@ export interface NotesStore {
 
 export class StoreError extends Error {}
 
+/** PostgREST 的錯誤把 code／details／hint 一起帶出來，否則只看 message 常常不知道問題在哪。 */
+function storeError(error: { message: string; code?: string; details?: string; hint?: string }): StoreError {
+  const parts = [error.message]
+  if (error.code) parts.push(`code=${error.code}`)
+  if (error.details) parts.push(error.details)
+  if (error.hint) parts.push(error.hint)
+  return new StoreError(parts.join(' | '))
+}
+
 /** Supabase：insert／select 靠 RLS 綁 owner，搜尋走 match_notes function。 */
 export function createSupabaseNotes(client: SupabaseClient, ownerId: string): NotesStore {
   return {
@@ -25,7 +34,7 @@ export function createSupabaseNotes(client: SupabaseClient, ownerId: string): No
         .select('id, content, created_at')
         .single()
 
-      if (error) throw new StoreError(error.message)
+      if (error) throw storeError(error)
       return toNote(data)
     },
 
@@ -36,7 +45,7 @@ export function createSupabaseNotes(client: SupabaseClient, ownerId: string): No
         min_similarity: minSimilarity,
       })
 
-      if (error) throw new StoreError(error.message)
+      if (error) throw storeError(error)
       return ((data ?? []) as RawHit[]).map((row) => ({ ...toNote(row), similarity: row.similarity }))
     },
 
@@ -47,7 +56,7 @@ export function createSupabaseNotes(client: SupabaseClient, ownerId: string): No
         .order('created_at', { ascending: false })
         .limit(limit)
 
-      if (error) throw new StoreError(error.message)
+      if (error) throw storeError(error)
       return ((data ?? []) as RawNote[]).map(toNote)
     },
   }
