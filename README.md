@@ -30,7 +30,8 @@ embedder。整條流程（記錄 → 搜尋 → 顯示相似度）可以直接�
 1. **建資料表**：Supabase → SQL Editor 貼上 [`supabase/schema.sql`](supabase/schema.sql) 執行一次。
    它會建立 `notes`（含指向 `auth.users` 的外鍵、RLS 政策、`authenticated` 的表格權限）
    與語意搜尋用的 `match_notes()` function，不會動到 taskeel 既有的任何表。
-   整份腳本可重複執行；SQL Editor 是包在一個 transaction 裡跑，中途出錯會整份 rollback。
+   整份腳本可重複執行（加欄位、改 `match_notes` 的回傳都涵蓋在內），
+   SQL Editor 是包在一個 transaction 裡跑，中途出錯會整份 rollback。
 2. **登入設定**：Supabase → Authentication → URL Configuration，把
    `https://<你的網域>/auth/callback` 加進允許清單。Google provider 沿用 taskeel 既有設定。
 3. **環境變數**：`cp .env.example .env.local` 後填入。

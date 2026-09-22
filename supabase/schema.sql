@@ -60,6 +60,10 @@ grant select, insert, update, delete on table notes to authenticated;
 -- ---------- 語意搜尋 ----------
 -- PostgREST 沒辦法直接下 `<=>` 排序，所以包成 function。
 -- security invoker：RLS 照常生效，只會搜到自己的筆記。
+--
+-- 先 drop 再建：create or replace 不能改變回傳型別（加 tags 欄位就會踩到
+-- "cannot change return type of existing function"）。權限在下面重新授予。
+drop function if exists match_notes(vector, int, float);
 create or replace function match_notes(
   query_embedding vector(512),
   match_count     int default 8,
