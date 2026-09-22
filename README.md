@@ -95,6 +95,13 @@ route handler 用的是**使用者自己的 session**（publishable key + cookie
 `scripts/seed-notes.json` 有 26 則範例筆記，用詞刻意與預期的搜尋字不同，方便驗證
 語意搜尋（而不是字面比對）：
 
+**已部署到 Vercel、想灌進正式資料庫**（最省事，不需要本機環境）：
+登入隨手記網頁 → 開瀏覽器主控台（F12 → Console）→ 貼上
+[`scripts/seed-browser.js`](scripts/seed-browser.js) 整段執行。
+它打的是同源的 `/api/notes`，自動帶登入 cookie，向量由伺服器端的 Voyage 產生。
+
+**在本機開發**：
+
 ```bash
 node scripts/seed.mjs                                  # 灌進本機跑著的 app
 VOYAGE_API_KEY=... node scripts/seed.mjs --sql --email you@example.com > seed.sql
@@ -102,6 +109,8 @@ VOYAGE_API_KEY=... node scripts/seed.mjs --sql --email you@example.com > seed.sq
 
 `--sql` 會用 Voyage 算好向量再輸出 INSERT，貼進 SQL Editor 執行即可；
 它強制要金鑰，因為本機假 embedder 產生的向量與線上查詢不在同一個空間，灌進去會搜不準。
+
+（`scripts/seed-browser.js` 由 `seed-notes.json` 產生，有測試確保兩邊一致；要改內容改 JSON 那份。）
 
 灌完可以試試「房東 漲價 → 租金調漲」「腰痛 運動 → 深蹲要練核心」
 「向量資料庫 索引 → pgvector HNSW」這類用詞不同的查詢。
