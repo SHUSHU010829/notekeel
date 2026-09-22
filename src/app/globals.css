@@ -1,60 +1,97 @@
-/* ── 設計 token ─────────────────────────────────────────
-   工具本身只有兩個動作：記錄、搜尋。版面維持單欄、留白大、
-   顏色只有一個強調色，讓輸入框永遠是畫面上最明顯的東西。  */
+/* ============================================================
+   notekeel — 沿用 taskeel 的視覺語言
+   深灰底、髮絲邊框、克制的紫色強調色；版面仍是單欄，
+   讓輸入框永遠是畫面上最明顯的東西。
+   ============================================================ */
+
 :root {
-  --bg: #f7f7f5;
-  --surface: #ffffff;
-  --surface-muted: #f2f2ef;
-  --border: #e4e4e0;
-  --border-strong: #d4d4cf;
-  --text: #1b1b19;
-  --text-muted: #6b6b66;
-  --text-subtle: #9a9a94;
-  --accent: #2f6f4f;
-  --accent-text: #ffffff;
-  --accent-soft: #e6f0ea;
-  --danger: #a33a2b;
-  --danger-soft: #fbeceb;
-  --radius: 12px;
-  --shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+  --bg: #0d0e10;
+  --bg-elevated: #16181d;
+  --bg-hover: rgba(255, 255, 255, 0.04);
+  --bg-active: rgba(255, 255, 255, 0.06);
+  --border: rgba(255, 255, 255, 0.06);
+  --border-strong: rgba(255, 255, 255, 0.12);
+  --text: #e6e7ea;
+  --text-dim: #8a8f98;
+  --text-faint: #6e7178;
+  --accent: #5e6ad2;
+  --accent-hover: #6b78e0;
+  --accent-soft: rgba(94, 106, 210, 0.16);
+  --danger: #eb5757;
+  --danger-soft: rgba(235, 87, 87, 0.12);
+  --danger-border: rgba(235, 87, 87, 0.3);
+  --radius: 6px;
+  --radius-lg: 8px;
+  --font: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto,
+    'Noto Sans TC', 'PingFang TC', 'Microsoft JhengHei', Helvetica, Arial,
+    sans-serif;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --bg: #131413;
-    --surface: #1b1d1b;
-    --surface-muted: #212422;
-    --border: #2b2e2c;
-    --border-strong: #3b403d;
-    --text: #e9ebe9;
-    --text-muted: #9ba09c;
-    --text-subtle: #767b78;
-    --accent: #6cbd93;
-    --accent-text: #10241a;
-    --accent-soft: #1d2b24;
-    --danger: #f0a89e;
-    --danger-soft: #35201d;
-    --shadow: none;
-  }
+:root[data-theme='light'] {
+  --bg: #ffffff;
+  --bg-elevated: #ffffff;
+  --bg-hover: rgba(0, 0, 0, 0.04);
+  --bg-active: rgba(0, 0, 0, 0.07);
+  --border: rgba(0, 0, 0, 0.09);
+  --border-strong: rgba(0, 0, 0, 0.16);
+  --text: #1c1d21;
+  --text-dim: #5b616b;
+  --text-faint: #8a8f98;
+  --accent-soft: rgba(94, 106, 210, 0.12);
+  --danger-soft: rgba(235, 87, 87, 0.09);
+  --danger-border: rgba(235, 87, 87, 0.28);
 }
 
-* { box-sizing: border-box; }
-html, body { margin: 0; padding: 0; }
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+}
+
+/* 每個 rem 都從這裡量起，與 taskeel 同一個基準 */
+html {
+  font-size: 15px;
+}
 
 body {
   background: var(--bg);
   color: var(--text);
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Noto Sans TC',
-    'PingFang TC', 'Microsoft JhengHei', sans-serif;
-  font-size: 15px;
-  line-height: 1.6;
+  font-family: var(--font);
+  font-size: 1rem;
+  line-height: 1.55;
   -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
 }
 
-a { color: inherit; text-decoration: none; }
-button, input, textarea { font: inherit; color: inherit; }
+button {
+  font-family: inherit;
+  font-size: inherit;
+  cursor: pointer;
+  /* 預設不給邊框，需要的元件自己開；避免工具列按鈕冒出框 */
+  border: none;
+}
 
-/* ── 版面骨架 ──────────────────────────────────────── */
+input,
+textarea {
+  font-family: inherit;
+  font-size: inherit;
+  color: inherit;
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
+}
+
+::selection {
+  background: rgba(94, 106, 210, 0.35);
+}
+
+/* ---------- 版面骨架 ---------- */
 .shell {
   max-width: 680px;
   margin: 0 auto;
@@ -64,60 +101,154 @@ button, input, textarea { font: inherit; color: inherit; }
 .topbar {
   display: flex;
   align-items: center;
-  gap: 12px;
-  padding: 18px 0 20px;
+  gap: 8px;
+  height: 48px;
+  margin-bottom: 20px;
+  border-bottom: 1px solid var(--border);
 }
-
-.topbar .tabs { margin-left: auto; }
 
 .brand {
-  font-size: 15px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.9333rem;
   font-weight: 600;
-  letter-spacing: -0.01em;
+  letter-spacing: 0.2px;
+  color: var(--text);
 }
 
-.brand span { color: var(--text-subtle); font-weight: 400; }
+.brand svg {
+  color: var(--accent);
+}
 
 .tabs {
   display: inline-flex;
-  padding: 3px;
-  background: var(--surface-muted);
-  border: 1px solid var(--border);
-  border-radius: 999px;
+  align-items: center;
+  gap: 2px;
+  margin-left: auto;
 }
 
 .tabs a {
-  padding: 5px 14px;
-  border-radius: 999px;
-  color: var(--text-muted);
-  font-size: 13px;
+  padding: 4px 12px;
+  border-radius: var(--radius);
+  color: var(--text-dim);
+  font-size: 0.8667rem;
+}
+
+.tabs a:hover {
+  background: var(--bg-hover);
+  color: var(--text);
 }
 
 .tabs a[aria-current='page'] {
-  background: var(--surface);
-  border: 1px solid var(--border);
+  background: var(--bg-active);
   color: var(--text);
   font-weight: 500;
 }
 
-/* 帳號（與 taskeel 同一組 Supabase 帳號） */
-.account {
-  max-width: 140px;
-  overflow: hidden;
-  padding: 4px 12px;
-  border: 1px solid var(--border);
-  border-radius: 999px;
-  background: var(--surface);
-  color: var(--text-muted);
-  font-size: 12.5px;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  cursor: pointer;
+/* ---------- 帳號（與 taskeel 同一組 Supabase 帳號） ---------- */
+.acct {
+  position: relative;
 }
 
-.account:hover { border-color: var(--border-strong); color: var(--text); }
+.acct-button {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  max-width: 180px;
+  padding: 4px 8px 4px 4px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: transparent;
+  color: var(--text-dim);
+}
 
-/* ── 登入頁 ───────────────────────────────────────── */
+.acct-button:hover {
+  background: var(--bg-hover);
+  color: var(--text);
+}
+
+.acct-avatar {
+  width: 24px;
+  height: 24px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  border-radius: 50%;
+  background: var(--accent);
+  color: #fff;
+  font-size: 0.8667rem;
+  font-weight: 600;
+  text-transform: uppercase;
+}
+
+/* 使用者識別就是 id，用等寬字比較好對 */
+.acct-id {
+  overflow: hidden;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.8rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.acct-menu {
+  position: absolute;
+  top: calc(100% + 4px);
+  right: 0;
+  z-index: 20;
+  width: 264px;
+  padding: 4px;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
+}
+
+.acct-hint {
+  padding: 4px 8px 2px;
+  color: var(--text-faint);
+  font-size: 0.7333rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+/* 完整 id 攤開來顯示，要複製、要對帳都看得到 */
+.acct-id-full {
+  padding: 0 8px 6px;
+  color: var(--text);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.7333rem;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+  user-select: all;
+}
+
+.acct-sep {
+  height: 1px;
+  margin: 4px 0;
+  background: var(--border);
+}
+
+.acct-item {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--text-dim);
+  font-size: 0.8667rem;
+  text-align: left;
+}
+
+.acct-item:hover {
+  background: var(--bg-hover);
+  color: var(--text);
+}
+
+/* ---------- 登入頁 ---------- */
 .login {
   display: flex;
   align-items: center;
@@ -129,81 +260,133 @@ button, input, textarea { font: inherit; color: inherit; }
   width: 100%;
   max-width: 360px;
   padding: 28px 24px;
-  background: var(--surface);
+  background: var(--bg-elevated);
   border: 1px solid var(--border);
-  border-radius: var(--radius);
-  box-shadow: var(--shadow);
+  border-radius: var(--radius-lg);
   text-align: center;
 }
 
-.login-card h1 { margin: 0; font-size: 20px; }
+.login-card h1 {
+  margin: 0;
+  font-size: 1.2667rem;
+  font-weight: 600;
+  letter-spacing: 0.2px;
+}
 
 .login-sub {
   margin: 6px 0 22px;
-  color: var(--text-muted);
-  font-size: 13.5px;
+  color: var(--text-dim);
+  font-size: 0.8667rem;
 }
 
-.login-btn { width: 100%; justify-content: center; }
+.login-btn {
+  width: 100%;
+  justify-content: center;
+  padding: 8px 12px;
+}
 
 .login-hint {
   margin: 16px 0 0;
-  color: var(--text-subtle);
-  font-size: 12.5px;
+  color: var(--text-faint);
+  font-size: 0.8rem;
 }
 
-/* ── 記錄頁 ───────────────────────────────────────── */
-.composer {
-  background: var(--surface);
-  border: 1px solid var(--border);
+/* ---------- 按鈕 ---------- */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 12px;
+  border: 1px solid var(--border-strong);
   border-radius: var(--radius);
-  box-shadow: var(--shadow);
+  background: var(--bg-elevated);
+  color: var(--text);
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.btn:hover:not(:disabled) {
+  background: var(--bg-active);
+}
+
+.btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.btn.primary {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+}
+
+.btn.primary:hover:not(:disabled) {
+  background: var(--accent-hover);
+}
+
+.linklike {
+  padding: 0;
+  border: none;
+  background: none;
+  color: var(--text-faint);
+  font-size: 0.8rem;
+}
+
+.linklike:hover:not(:disabled) {
+  color: var(--text);
+}
+
+.linklike.danger {
+  color: var(--danger);
+  font-weight: 500;
+}
+
+.linklike:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* ---------- 記錄頁 ---------- */
+.composer {
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
   overflow: hidden;
+}
+
+.composer:focus-within {
+  border-color: var(--accent);
 }
 
 .composer textarea {
   display: block;
   width: 100%;
   min-height: 180px;
-  padding: 16px;
+  padding: 14px;
   border: none;
   background: transparent;
-  resize: vertical;
   outline: none;
+  resize: vertical;
+  line-height: 1.6;
 }
 
-.composer textarea::placeholder { color: var(--text-subtle); }
-
-.composer:focus-within { border-color: var(--border-strong); }
+.composer textarea::placeholder {
+  color: var(--text-faint);
+}
 
 .composer-bar {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-  padding: 10px 12px 10px 16px;
+  padding: 8px 10px 8px 14px;
   border-top: 1px solid var(--border);
-  background: var(--surface-muted);
 }
 
-.hint { color: var(--text-subtle); font-size: 12.5px; }
-
-.btn {
-  padding: 8px 18px;
-  border: 1px solid var(--border-strong);
-  border-radius: 999px;
-  background: var(--surface);
-  cursor: pointer;
-}
-
-.btn:hover:not(:disabled) { border-color: var(--text-subtle); }
-.btn:disabled { opacity: 0.5; cursor: not-allowed; }
-
-.btn.primary {
-  background: var(--accent);
-  border-color: var(--accent);
-  color: var(--accent-text);
-  font-weight: 500;
+.hint,
+.muted {
+  color: var(--text-faint);
+  font-size: 0.8rem;
 }
 
 /* 送出後的提示，淡入後自行消失 */
@@ -212,31 +395,43 @@ button, input, textarea { font: inherit; color: inherit; }
   align-items: center;
   gap: 6px;
   margin-top: 12px;
-  padding: 7px 14px;
-  border-radius: 999px;
-  background: var(--accent);
-  color: var(--accent-text);
-  font-size: 13px;
-  font-weight: 500;
+  padding: 5px 12px;
+  border: 1px solid var(--accent);
+  border-radius: var(--radius);
+  background: var(--accent-soft);
+  color: var(--text);
+  font-size: 0.8667rem;
   animation: rise 160ms ease-out;
 }
 
-.flash::before { content: '✓'; }
+.flash::before {
+  content: '✓';
+  color: var(--accent);
+}
 
 .flash.error {
   background: var(--danger-soft);
+  border-color: var(--danger-border);
   color: var(--danger);
-  border: 1px solid currentColor;
 }
 
-.flash.error::before { content: '!'; }
+.flash.error::before {
+  content: '!';
+  color: var(--danger);
+}
 
 @keyframes rise {
-  from { opacity: 0; transform: translateY(4px); }
-  to { opacity: 1; transform: none; }
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
 }
 
-/* ── 搜尋頁 ───────────────────────────────────────── */
+/* ---------- 搜尋頁 ---------- */
 .searchbar {
   display: flex;
   gap: 8px;
@@ -245,20 +440,29 @@ button, input, textarea { font: inherit; color: inherit; }
 .searchbar input {
   flex: 1;
   min-width: 0;
-  padding: 11px 14px;
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: 999px;
+  padding: 7px 10px;
+  background: var(--bg);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius);
   outline: none;
 }
 
-.searchbar input:focus { border-color: var(--border-strong); }
+.searchbar input::placeholder {
+  color: var(--text-faint);
+}
 
-/* ── 筆記列表 ─────────────────────────────────────── */
+.searchbar input:focus {
+  border-color: var(--accent);
+}
+
+/* ---------- 筆記列表 ---------- */
 .section-label {
   margin: 28px 0 10px;
-  color: var(--text-muted);
-  font-size: 12.5px;
+  color: var(--text-faint);
+  font-size: 0.7333rem;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
 }
 
 .section-head {
@@ -268,20 +472,30 @@ button, input, textarea { font: inherit; color: inherit; }
   gap: 12px;
 }
 
-.section-head .section-label { margin-bottom: 10px; }
-
-.notes { display: flex; flex-direction: column; gap: 8px; }
-
-.note {
-  padding: 14px 16px;
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  box-shadow: var(--shadow);
+.section-head .section-label {
+  margin-bottom: 10px;
 }
 
-.note-body.clickable { cursor: pointer; }
-.note:hover { border-color: var(--border-strong); }
+.notes {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.note {
+  padding: 12px 14px;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+}
+
+.note:hover {
+  border-color: var(--border-strong);
+}
+
+.note-body.clickable {
+  cursor: pointer;
+}
 
 .note-text {
   margin: 0;
@@ -302,44 +516,8 @@ button, input, textarea { font: inherit; color: inherit; }
   flex-wrap: wrap;
   gap: 10px;
   margin-top: 10px;
-  color: var(--text-subtle);
-  font-size: 12.5px;
-}
-
-/* 標籤 */
-.note-tags {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-  margin-top: 10px;
-}
-
-.tag {
-  padding: 2px 9px;
-  border: 1px solid var(--border);
-  border-radius: 999px;
-  background: var(--surface-muted);
-  color: var(--text-muted);
-  font-size: 12px;
-  line-height: 1.5;
-}
-
-button.tag { cursor: pointer; }
-button.tag:hover { border-color: var(--accent); color: var(--accent); }
-
-.tag.active {
-  background: var(--accent);
-  border-color: var(--accent);
-  color: var(--accent-text);
-}
-
-/* 標籤篩選列 */
-.tagbar {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 6px;
-  margin: 18px 0 0;
+  color: var(--text-faint);
+  font-size: 0.8rem;
 }
 
 /* 刪除等操作靠右，平常低調、hover 才明顯 */
@@ -350,41 +528,65 @@ button.tag:hover { border-color: var(--accent); color: var(--accent); }
   margin-left: auto;
 }
 
-.linklike {
-  padding: 0;
-  border: none;
-  background: none;
-  color: var(--text-subtle);
-  font-size: 12.5px;
-  cursor: pointer;
+/* ---------- 標籤 ---------- */
+.note-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 10px;
 }
 
-.linklike:hover { color: var(--text); }
-.linklike.danger { color: var(--danger); font-weight: 500; }
-.linklike:disabled { opacity: 0.5; cursor: not-allowed; }
+.tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 7px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: transparent;
+  color: var(--text-dim);
+  font-size: 0.8rem;
+  white-space: nowrap;
+}
+
+button.tag:hover {
+  border-color: var(--accent);
+  color: var(--text);
+}
+
+.tag.active {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+  color: var(--text);
+}
+
+/* 標籤篩選列 */
+.tagbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin-top: 18px;
+}
 
 .score {
-  padding: 1px 8px;
-  border-radius: 999px;
-  background: var(--accent-soft);
-  color: var(--accent);
-  font-size: 12px;
+  padding: 1px 7px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  color: var(--text-dim);
+  font-size: 0.8rem;
   font-variant-numeric: tabular-nums;
 }
 
-@media (prefers-color-scheme: dark) {
-  .score { color: var(--text); }
-}
-
+/* ---------- 其他 ---------- */
 .empty {
-  padding: 40px 16px;
+  padding: 48px 16px;
+  color: var(--text-faint);
   text-align: center;
-  color: var(--text-subtle);
-  font-size: 13.5px;
 }
 
 .error-text {
   margin-top: 12px;
   color: var(--danger);
-  font-size: 13.5px;
+  font-size: 0.8667rem;
 }
