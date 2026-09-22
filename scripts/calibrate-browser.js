@@ -1,12 +1,13 @@
-// 校準 SEARCH_MIN_SIMILARITY —— 在「已登入的隨手記網頁」主控台貼上執行。
+// 校準搜尋門檻 —— 在「已登入的隨手記網頁」主控台貼上執行。
 //
-// 它會用幾組「用詞完全不同」的查詢去搜，強制 min=0（不過濾），
-// 印出每組的最高分與是否命中預期，最後建議一個門檻值。
+// 它用幾組「用詞完全不同」的查詢去搜（外加一組刻意無關的反例），
+// 強制不過濾，印出每組的分數，最後建議門檻值。
 //
-// Voyage 免費方案沒綁付款方式只有 3 RPM，所以每次查詢間隔 21 秒，
-// 整份跑完約兩分鐘。綁了付款方式的話可以把 INTERVAL_MS 改小。
+// 有跑 rerank 的話會以 relevance 為準：那個分數有校準過，適合設絕對門檻
+// （寫進 RERANK_MIN_SCORE）；沒有 rerank 才退而看 similarity。
 ;(async () => {
-  const INTERVAL_MS = 21_000
+  // Voyage 免費方案沒綁付款方式只有 3 RPM，那種情況請把這個值調成 21000
+  const INTERVAL_MS = 1_200
 
   const cases = [
     { query: '節稅', expect: '報稅' },
@@ -18,61 +19,56 @@
   ]
 
   const rows = []
-
-  console.log(
-    `共 ${cases.length} 組，每組間隔 ${INTERVAL_MS / 1000} 秒（配合 Voyage 免費方案 3 RPM），` +
-      `預計 ${Math.round(((cases.length - 1) * INTERVAL_MS) / 1000)} 秒跑完。結果會邊跑邊印。`,
-  )
+  let usedRerank = false
 
   for (const [index, testCase] of cases.entries()) {
-    if (index > 0) {
-      console.log(`⏳ 等 ${INTERVAL_MS / 1000} 秒再查下一組（剩 ${cases.length - index} 組）…`)
-      await new Promise((resolve) => setTimeout(resolve, INTERVAL_MS))
-    }
+    if (index > 0) await new Promise((resolve) => setTimeout(resolve, INTERVAL_MS))
 
-    const params = new URLSearchParams({ q: testCase.query, min: '0', limit: '3' })
+    const params = new URLSearchParams({
+      q: testCase.query,
+      min: '0',
+      minRelevance: '0',
+      limit: '5',
+    })
     const response = await fetch(`/api/notes/search?${params}`)
     if (!response.ok) {
       console.error(`✗ ${response.status}`, await response.text())
       return
     }
 
-    const { results } = await response.json()
+    const { results, reranked } = await response.json()
+    usedRerank = usedRerank || reranked
+
+    // 有 rerank 就以 relevance 為準
+    const scoreOf = (hit) => (hit.relevance ?? hit.similarity)
     const top = results[0]
-    const hit = testCase.expect ? results.findIndex((r) => r.content.includes(testCase.expect)) : -1
+    const hitIndex = testCase.expect
+      ? results.findIndex((hit) => hit.content.includes(testCase.expect))
+      : -1
 
     rows.push({
       查詢: testCase.query,
-      最高分: top ? Number(top.similarity.toFixed(3)) : null,
-      命中第幾名: testCase.expect ? (hit === -1 ? '沒進前三' : hit + 1) : '(反例)',
-      命中該則的分數:
-        hit >= 0 ? Number(results[hit].similarity.toFixed(3)) : testCase.expect ? null : '—',
+      最高分: top ? Number(scoreOf(top).toFixed(3)) : null,
+      命中第幾名: testCase.expect ? (hitIndex === -1 ? '沒進前五' : hitIndex + 1) : '(反例)',
+      命中分數: hitIndex >= 0 ? Number(scoreOf(results[hitIndex]).toFixed(3)) : testCase.expect ? null : '—',
       最高分的內容: top ? top.content.slice(0, 18) + '…' : '(無結果)',
     })
-    // 邊跑邊印，中途停掉也看得到已經量到的分數
-    const topScore = top ? top.similarity.toFixed(3) : '—'
+
+    const label = `${index + 1}/${cases.length}　「${testCase.query}」`
     if (!testCase.expect) {
-      console.log(
-        `${index + 1}/${cases.length}　「${testCase.query}」（反例）最高分 ${topScore}　` +
-          `${top ? top.content.slice(0, 16) + '…' : '(無結果)'}`,
-      )
-    } else if (hit === -1) {
-      console.warn(
-        `${index + 1}/${cases.length}　「${testCase.query}」沒在前三名找到含「${testCase.expect}」的筆記　` +
-          `最高分 ${topScore}：${top ? top.content.slice(0, 16) + '…' : '(無結果)'}`,
-      )
+      console.log(`${label}（反例）最高分 ${top ? scoreOf(top).toFixed(3) : '—'}`)
+    } else if (hitIndex === -1) {
+      console.warn(`${label}沒在前五名找到含「${testCase.expect}」的筆記`)
     } else {
-      console.log(
-        `${index + 1}/${cases.length}　「${testCase.query}」命中第 ${hit + 1} 名　` +
-          `分數 ${results[hit].similarity.toFixed(3)}（最高分 ${topScore}）：${results[hit].content.slice(0, 16)}…`,
-      )
+      console.log(`${label}命中第 ${hitIndex + 1} 名，分數 ${scoreOf(results[hitIndex]).toFixed(3)}`)
     }
   }
 
   console.table(rows)
+  console.log(usedRerank ? '分數來源：rerank 的 relevance' : '分數來源：向量的 similarity（沒跑 rerank）')
 
-  const hits = rows.filter((r) => typeof r.命中該則的分數 === 'number').map((r) => r.命中該則的分數)
-  const noise = rows.filter((r) => r.命中第幾名 === '(反例)').map((r) => r.最高分 ?? 0)
+  const hits = rows.filter((row) => typeof row.命中分數 === 'number').map((row) => row.命中分數)
+  const noise = rows.filter((row) => row.命中第幾名 === '(反例)').map((row) => row.最高分 ?? 0)
 
   if (hits.length === 0) {
     console.warn('沒有任何一組命中預期，先確認測資有灌進去（列表頁看得到嗎）。')
@@ -81,12 +77,13 @@
 
   const lowestHit = Math.min(...hits)
   const highestNoise = noise.length ? Math.max(...noise) : 0
+  const variable = usedRerank ? 'RERANK_MIN_SCORE' : 'SEARCH_MIN_SIMILARITY'
   console.log(`該找到的最低分：${lowestHit.toFixed(3)}　無關查詢的最高分：${highestNoise.toFixed(3)}`)
 
   if (highestNoise < lowestHit) {
-    const suggestion = ((lowestHit + highestNoise) / 2).toFixed(2)
-    console.log(`建議 SEARCH_MIN_SIMILARITY = ${suggestion}（取中間值，兩邊都留餘裕）`)
+    console.log(`建議 ${variable} = ${((lowestHit + highestNoise) / 2).toFixed(2)}（取中間值，兩邊都留餘裕）`)
   } else {
-    console.log('相關與無關的分數重疊，先設 0（不過濾）靠排序就好，之後再依體感微調。')
+    console.log(`相關與無關的分數重疊，${variable} 先設 0（不過濾）靠排序就好。`)
+    if (!usedRerank) console.log('開啟 rerank 之後通常就切得開了。')
   }
 })()

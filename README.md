@@ -85,8 +85,9 @@ Next.js 專案），把上表的變數填進 Settings → Environment Variables 
 那等於退化成關鍵字比對，語意搜尋的意義就沒了。合適的值取決於模型與內容，**不要憑感覺設**。
 
 灌完測資後，在登入的網頁主控台貼上 [`scripts/calibrate-browser.js`](scripts/calibrate-browser.js)：
-它會用幾組用詞完全不同的查詢（外加一組刻意無關的反例）在 `min=0` 下實測，
+它會用幾組用詞完全不同的查詢（外加一組刻意無關的反例）在不過濾的情況下實測，
 印出「該找到的最低分」與「無關查詢的最高分」，並建議取中間值當門檻。
+有跑 rerank 時以 `relevance` 為準（建議寫進 `RERANK_MIN_SCORE`），否則看 `similarity`。
 
 ### 一組實測結果（voyage-4-lite，範例測資 26 則）
 
