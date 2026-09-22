@@ -117,12 +117,39 @@ describe('錯誤訊息', () => {
   })
 
   it('其他 API 錯誤帶上狀態碼與訊息', async () => {
-    parse.mockRejectedValue(new FakeAPIError(400, 'output_config.effort is not supported'))
-    await expect(suggestTags(['內容'])).rejects.toThrow(/400.*effort/)
+    parse.mockRejectedValue(new FakeAPIError(400, 'max_tokens is too large'))
+    await expect(suggestTags(['內容'])).rejects.toThrow(/400.*max_tokens/)
   })
 
   it('非 API 的例外也帶得出訊息', async () => {
     parse.mockRejectedValue(new Error('boom'))
     await expect(suggestTags(['內容'])).rejects.toThrow(/boom/)
+  })
+})
+
+describe('不支援 effort 的模型', () => {
+  it('被拒絕後自動改成不帶 effort 重送，並記住不再帶', async () => {
+    const effortError = new FakeAPIError(400, 'This model does not support the effort parameter.')
+    parse
+      .mockRejectedValueOnce(effortError)
+      .mockResolvedValue({ stop_reason: 'end_turn', parsed_output: { notes: [{ index: 0, tags: ['理財'] }] } })
+
+    expect(await suggestTags(['存錢的筆記'])).toEqual([['理財']])
+    expect(parse).toHaveBeenCalledTimes(2)
+    expect(parse.mock.calls[0][0].output_config).toHaveProperty('effort')
+    expect(parse.mock.calls[1][0].output_config).not.toHaveProperty('effort')
+    // 結構化輸出的格式兩次都要在
+    expect(parse.mock.calls[1][0].output_config).toHaveProperty('format')
+
+    // 第二次呼叫起就不該再帶 effort
+    parse.mockClear()
+    await suggestTags(['另一則'])
+    expect(parse).toHaveBeenCalledTimes(1)
+    expect(parse.mock.calls[0][0].output_config).not.toHaveProperty('effort')
+  })
+
+  it('重送仍失敗時把第二次的錯誤帶出來', async () => {
+    parse.mockRejectedValue(new FakeAPIError(400, 'credit balance is too low'))
+    await expect(suggestTags(['內容'])).rejects.toThrow(/credit balance/)
   })
 })

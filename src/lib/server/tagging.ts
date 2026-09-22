@@ -31,6 +31,20 @@ const SYSTEM_PROMPT = `你是一個筆記整理助手。使用者會給你數則
   （已有「理財」就不要再造「財務」「金錢管理」）。真的沒有合適的才新增。
 - 每則都要回，用 index 對應輸入的編號。`
 
+/**
+ * 並非所有模型都支援 output_config.effort（Haiku 4.5 就會回 400）。
+ * 與其維護一份很快就過時的對照表，不如碰到了就記下來、之後不再帶。
+ */
+let effortSupported = true
+
+function isUnsupportedEffort(error: unknown): boolean {
+  return (
+    error instanceof Anthropic.APIError &&
+    error.status === 400 &&
+    /effort/i.test(String(error.message))
+  )
+}
+
 /** 把 SDK 的錯誤轉成帶得出原因的 TaggingError（由具體到一般） */
 function asTaggingError(error: unknown): TaggingError {
   if (error instanceof Anthropic.AuthenticationError) {
@@ -81,18 +95,31 @@ export async function suggestTags(
 ): Promise<string[][]> {
   if (contents.length === 0) return []
 
+  const request = {
+    model: ANTHROPIC_MODEL,
+    max_tokens: 4000,
+    system: SYSTEM_PROMPT,
+    messages: [{ role: 'user' as const, content: buildPrompt(contents, vocabulary) }],
+  }
+  const format = zodOutputFormat(TaggedNotesSchema)
+
   let response
   try {
     response = await client().messages.parse({
-      model: ANTHROPIC_MODEL,
-      max_tokens: 4000,
+      ...request,
       // 標籤屬於分類任務，低 effort 就夠，也讓背景標籤不會拖太久
-      output_config: { effort: 'low', format: zodOutputFormat(TaggedNotesSchema) },
-      system: SYSTEM_PROMPT,
-      messages: [{ role: 'user', content: buildPrompt(contents, vocabulary) }],
+      output_config: effortSupported ? { effort: 'low', format } : { format },
     })
   } catch (error) {
-    throw asTaggingError(error)
+    if (!isUnsupportedEffort(error)) throw asTaggingError(error)
+
+    // 有些模型（例如 Haiku 4.5）不吃 effort；記下來，之後不再帶
+    effortSupported = false
+    try {
+      response = await client().messages.parse({ ...request, output_config: { format } })
+    } catch (retryError) {
+      throw asTaggingError(retryError)
+    }
   }
 
   if (response.stop_reason === 'refusal') {
