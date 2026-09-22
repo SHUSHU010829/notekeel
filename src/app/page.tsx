@@ -1,7 +1,14 @@
 'use client'
 
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { ApiError, createNote, deleteNote, listNotes, type Note } from '../lib/api'
+import {
+  ApiError,
+  createNote,
+  deleteNote,
+  listNotes,
+  tagUntaggedNotes,
+  type Note,
+} from '../lib/api'
 import { NoteCard } from '../components/NoteCard'
 
 /** 記錄頁：打開就能打字，Cmd/Ctrl + Enter 直接送出。 */
@@ -11,26 +18,29 @@ export default function ComposePage() {
   const [flash, setFlash] = useState<{ tone: 'ok' | 'error'; message: string } | null>(null)
   const [recent, setRecent] = useState<Note[]>([])
   const [loadingRecent, setLoadingRecent] = useState(true)
+  const [activeTag, setActiveTag] = useState<string | null>(null)
+  const [tagging, setTagging] = useState(false)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
 
   useEffect(() => {
     textareaRef.current?.focus()
   }, [])
 
-  useEffect(() => {
-    let cancelled = false
-    listNotes(5)
-      .then((notes) => {
-        if (!cancelled) setRecent(notes)
-      })
-      .catch(() => undefined)
-      .finally(() => {
-        if (!cancelled) setLoadingRecent(false)
-      })
-    return () => {
-      cancelled = true
+  // 標籤是背景產生的，剛記完那幾秒還不會有；重新抓一次就看得到
+  const reload = useCallback(async (tag: string | null) => {
+    setLoadingRecent(true)
+    try {
+      setRecent(await listNotes(tag ? 20 : 5, tag ?? undefined))
+    } catch {
+      // 讀不到最近筆記不是致命問題，維持原本畫面就好
+    } finally {
+      setLoadingRecent(false)
     }
   }, [])
+
+  useEffect(() => {
+    void reload(activeTag)
+  }, [reload, activeTag])
 
   // 提示訊息自己淡出，不需要使用者關掉
   useEffect(() => {
@@ -62,9 +72,11 @@ export default function ComposePage() {
     try {
       const created = await createNote(trimmed)
       setContent('')
-      setRecent((prev) => [created, ...prev].slice(0, 5))
+      setRecent((prev) => [created, ...prev].slice(0, activeTag ? 20 : 5))
       setFlash({ tone: 'ok', message: '已記錄' })
       textareaRef.current?.focus()
+      // 標籤在伺服器端背景產生，等幾秒再抓一次就會出現
+      setTimeout(() => void reload(activeTag), 4000)
     } catch (error) {
       setFlash({
         tone: 'error',
@@ -73,7 +85,28 @@ export default function ComposePage() {
     } finally {
       setSaving(false)
     }
-  }, [content, saving])
+  }, [content, saving, activeTag, reload])
+
+  async function tagAll() {
+    setTagging(true)
+    try {
+      const { tagged, remaining } = await tagUntaggedNotes()
+      setFlash({
+        tone: 'ok',
+        message: remaining > 0 ? `標了 ${tagged} 則，還有 ${remaining} 則` : `標了 ${tagged} 則`,
+      })
+      await reload(activeTag)
+    } catch (error) {
+      setFlash({
+        tone: 'error',
+        message: error instanceof ApiError ? error.message : '加標籤失敗，請稍後再試。',
+      })
+    } finally {
+      setTagging(false)
+    }
+  }
+
+  const untaggedCount = recent.filter((note) => note.tags.length === 0).length
 
   return (
     <main>
@@ -101,7 +134,24 @@ export default function ComposePage() {
 
       {flash ? <div className={`flash${flash.tone === 'error' ? ' error' : ''}`}>{flash.message}</div> : null}
 
-      <h2 className="section-label">最近記錄</h2>
+      {activeTag ? (
+        <div className="tagbar">
+          <span className="muted">標籤</span>
+          <span className="tag active">{activeTag}</span>
+          <button className="linklike" onClick={() => setActiveTag(null)}>
+            清除
+          </button>
+        </div>
+      ) : null}
+
+      <div className="section-head">
+        <h2 className="section-label">{activeTag ? `「${activeTag}」的筆記` : '最近記錄'}</h2>
+        {untaggedCount > 0 ? (
+          <button className="linklike" onClick={() => void tagAll()} disabled={tagging}>
+            {tagging ? '整理中⋯' : '整理標籤'}
+          </button>
+        ) : null}
+      </div>
       {loadingRecent ? (
         <div className="empty">讀取中⋯</div>
       ) : recent.length === 0 ? (
@@ -109,7 +159,12 @@ export default function ComposePage() {
       ) : (
         <div className="notes">
           {recent.map((note) => (
-            <NoteCard key={note.id} note={note} onDelete={removeNote} />
+            <NoteCard
+              key={note.id}
+              note={note}
+              onDelete={removeNote}
+              onTagClick={setActiveTag}
+            />
           ))}
         </div>
       )}

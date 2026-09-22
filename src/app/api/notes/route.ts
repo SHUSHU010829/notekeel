@@ -1,4 +1,4 @@
-import { NextResponse } from 'next/server'
+import { NextResponse, after } from 'next/server'
 import {
   DEFAULT_LIST_LIMIT,
   MAX_CONTENT_LENGTH,
@@ -7,6 +7,7 @@ import {
 import { embed } from '../../../lib/server/embedding'
 import { badRequest, clampLimit, errorResponse } from '../../../lib/server/respond'
 import { notesForRequest } from '../../../lib/server/session'
+import { tagInBackground } from '../../../lib/server/tag-notes'
 
 /** POST /api/notes — 記下一則筆記：先轉成向量，再連同原文寫入。 */
 export async function POST(request: Request) {
@@ -23,6 +24,10 @@ export async function POST(request: Request) {
 
     const [embedding] = await embed([content], 'document')
     const created = await notes.create(content, embedding)
+
+    // 標籤不擋著回應：記錄速度是這個工具的重點，標籤晚幾秒出現沒關係
+    after(() => tagInBackground(notes, [created]))
+
     return NextResponse.json(created, { status: 201 })
   } catch (error) {
     return errorResponse(error)
@@ -35,8 +40,9 @@ export async function GET(request: Request) {
     const notes = await notesForRequest()
     const { searchParams } = new URL(request.url)
     const limit = clampLimit(searchParams.get('limit'), DEFAULT_LIST_LIMIT, MAX_LIST_LIMIT)
+    const tag = searchParams.get('tag')?.trim() || undefined
 
-    return NextResponse.json({ notes: await notes.list(limit) })
+    return NextResponse.json({ notes: await notes.list(limit, tag) })
   } catch (error) {
     return errorResponse(error)
   }

@@ -8,10 +8,12 @@ interface Props {
   note: Note | SearchHit
   /** 有給才會出現刪除按鈕；由呼叫端負責實際刪除與列表更新 */
   onDelete?: (id: string) => Promise<void> | void
+  /** 有給的話標籤可點，用來篩選 */
+  onTagClick?: (tag: string) => void
 }
 
 /** 預設收合成三行，點一下展開完整內容。 */
-export function NoteCard({ note, onDelete }: Props) {
+export function NoteCard({ note, onDelete, onTagClick }: Props) {
   const [expanded, setExpanded] = useState(false)
   const [confirming, setConfirming] = useState(false)
   const [deleting, setDeleting] = useState(false)
@@ -39,6 +41,22 @@ export function NoteCard({ note, onDelete }: Props) {
       >
         <p className={`note-text${isLong && !expanded ? ' clamped' : ''}`}>{note.content}</p>
       </div>
+
+      {note.tags.length > 0 ? (
+        <div className="note-tags">
+          {note.tags.map((tag) =>
+            onTagClick ? (
+              <button key={tag} className="tag" onClick={() => onTagClick(tag)}>
+                {tag}
+              </button>
+            ) : (
+              <span key={tag} className="tag">
+                {tag}
+              </span>
+            ),
+          )}
+        </div>
+      ) : null}
 
       <div className="note-meta">
         <time dateTime={note.createdAt} title={fullTime(note.createdAt)}>

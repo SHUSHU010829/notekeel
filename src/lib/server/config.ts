@@ -34,3 +34,16 @@ export const MAX_SEARCH_LIMIT = 50
 export const DEFAULT_LIST_LIMIT = 50
 export const MAX_LIST_LIMIT = 200
 export const MAX_CONTENT_LENGTH = 20000
+
+/**
+ * 自動標籤：用 Claude 幫每則筆記標 1–3 個標籤，方便之後瀏覽。
+ * 沒設 ANTHROPIC_API_KEY 就整個功能關閉（筆記照常記錄，只是沒有標籤）。
+ */
+export const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY ?? ''
+export const ANTHROPIC_MODEL = process.env.ANTHROPIC_MODEL ?? 'claude-opus-5'
+export const taggingEnabled = Boolean(ANTHROPIC_API_KEY)
+
+/** 一則筆記最多幾個標籤 */
+export const MAX_TAGS_PER_NOTE = 3
+/** 補標籤時一次處理幾則 */
+export const MAX_TAG_BATCH = 30

@@ -17,9 +17,16 @@ export interface NotesStore {
   /** 一次寫入多則：匯入時可以把 embedding 併成一個 Voyage 請求，省下大量 rate limit */
   createMany(items: NewNote[]): Promise<Note[]>
   search(embedding: number[], limit: number, minSimilarity: number): Promise<SearchHit[]>
-  list(limit: number): Promise<Note[]>
+  /** tag 有值時只列出帶該標籤的筆記 */
+  list(limit: number, tag?: string): Promise<Note[]>
   /** 刪除自己的一則筆記；找不到（或不是自己的）回 false */
   remove(id: string): Promise<boolean>
+  /** 還沒有標籤的筆記，供補標籤用 */
+  listUntagged(limit: number): Promise<Note[]>
+  /** 寫入標籤 */
+  setTags(id: string, tags: string[]): Promise<void>
+  /** 目前用過的所有標籤與各自的筆記數，由多到少 */
+  tagCounts(): Promise<{ tag: string; count: number }[]>
 }
 
 export class StoreError extends Error {}
@@ -40,7 +47,7 @@ export function createSupabaseNotes(client: SupabaseClient, ownerId: string): No
       const { data, error } = await client
         .from('notes')
         .insert({ owner_id: ownerId, content, embedding })
-        .select('id, content, created_at')
+        .select(NOTE_COLUMNS)
         .single()
 
       if (error) throw storeError(error)
@@ -53,7 +60,7 @@ export function createSupabaseNotes(client: SupabaseClient, ownerId: string): No
       const { data, error } = await client
         .from('notes')
         .insert(items.map((item) => ({ owner_id: ownerId, content: item.content, embedding: item.embedding })))
-        .select('id, content, created_at')
+        .select(NOTE_COLUMNS)
 
       if (error) throw storeError(error)
       return ((data ?? []) as RawNote[]).map(toNote)
@@ -70,15 +77,49 @@ export function createSupabaseNotes(client: SupabaseClient, ownerId: string): No
       return ((data ?? []) as RawHit[]).map((row) => ({ ...toNote(row), similarity: row.similarity }))
     },
 
-    async list(limit) {
+    async list(limit, tag) {
+      let query = client
+        .from('notes')
+        .select(NOTE_COLUMNS)
+        .order('created_at', { ascending: false })
+        .limit(limit)
+
+      if (tag) query = query.contains('tags', [tag])
+
+      const { data, error } = await query
+      if (error) throw storeError(error)
+      return ((data ?? []) as RawNote[]).map(toNote)
+    },
+
+    async listUntagged(limit) {
       const { data, error } = await client
         .from('notes')
-        .select('id, content, created_at')
+        .select(NOTE_COLUMNS)
+        .eq('tags', '{}')
         .order('created_at', { ascending: false })
         .limit(limit)
 
       if (error) throw storeError(error)
       return ((data ?? []) as RawNote[]).map(toNote)
+    },
+
+    async setTags(id, tags) {
+      const { error } = await client.from('notes').update({ tags }).eq('id', id)
+      if (error) throw storeError(error)
+    },
+
+    async tagCounts() {
+      // 標籤量不大，直接抓回來在應用層統計即可
+      const { data, error } = await client.from('notes').select('tags').limit(1000)
+      if (error) throw storeError(error)
+
+      const counts = new Map<string, number>()
+      for (const row of (data ?? []) as { tags: string[] | null }[]) {
+        for (const tag of row.tags ?? []) counts.set(tag, (counts.get(tag) ?? 0) + 1)
+      }
+      return [...counts.entries()]
+        .map(([tag, count]) => ({ tag, count }))
+        .sort((a, b) => b.count - a.count || a.tag.localeCompare(b.tag, 'zh-Hant'))
     },
 
     async remove(id) {
@@ -91,10 +132,13 @@ export function createSupabaseNotes(client: SupabaseClient, ownerId: string): No
   }
 }
 
+const NOTE_COLUMNS = 'id, content, created_at, tags'
+
 interface RawNote {
   id: string
   content: string
   created_at: string
+  tags: string[] | null
 }
 
 interface RawHit extends RawNote {
@@ -102,7 +146,7 @@ interface RawHit extends RawNote {
 }
 
 function toNote(row: RawNote): Note {
-  return { id: row.id, content: row.content, createdAt: row.created_at }
+  return { id: row.id, content: row.content, createdAt: row.created_at, tags: row.tags ?? [] }
 }
 
 // ── 本機模式 ────────────────────────────────────────────────
@@ -111,9 +155,12 @@ interface LocalRecord {
   ownerId: string
   note: Note
   embedding: number[]
+  /** 同一毫秒建立的筆記靠這個決定先後 */
+  seq: number
 }
 
 const localRecords: LocalRecord[] = []
+let localSeq = 0
 
 function cosine(a: number[], b: number[]): number {
   if (a.length !== b.length) return 0
@@ -138,8 +185,10 @@ export function createLocalNotes(ownerId: string): NotesStore {
         id: crypto.randomUUID(),
         content,
         createdAt: new Date().toISOString(),
+        tags: [],
       }
-      localRecords.push({ ownerId, note, embedding })
+      localSeq += 1
+      localRecords.push({ ownerId, note, embedding, seq: localSeq })
       return note
     },
 
@@ -157,11 +206,37 @@ export function createLocalNotes(ownerId: string): NotesStore {
         .slice(0, limit)
     },
 
-    async list(limit) {
+    async list(limit, tag) {
       return mine()
-        .map((record) => record.note)
-        .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
+        .filter((record) => !tag || record.note.tags.includes(tag))
+        .sort(newestFirst)
         .slice(0, limit)
+        .map((record) => record.note)
+    },
+
+    async listUntagged(limit) {
+      return mine()
+        .filter((record) => record.note.tags.length === 0)
+        .sort(newestFirst)
+        .slice(0, limit)
+        .map((record) => record.note)
+    },
+
+    async setTags(id, tags) {
+      const record = localRecords.find(
+        (item) => item.ownerId === ownerId && item.note.id === id,
+      )
+      if (record) record.note = { ...record.note, tags }
+    },
+
+    async tagCounts() {
+      const counts = new Map<string, number>()
+      for (const record of mine()) {
+        for (const tag of record.note.tags) counts.set(tag, (counts.get(tag) ?? 0) + 1)
+      }
+      return [...counts.entries()]
+        .map(([tag, count]) => ({ tag, count }))
+        .sort((a, b) => b.count - a.count || a.tag.localeCompare(b.tag, 'zh-Hant'))
     },
 
     async remove(id) {
@@ -176,6 +251,11 @@ export function createLocalNotes(ownerId: string): NotesStore {
 }
 
 /** 測試用：清掉記憶體模式的資料。 */
+function newestFirst(a: LocalRecord, b: LocalRecord): number {
+  return b.note.createdAt.localeCompare(a.note.createdAt) || b.seq - a.seq
+}
+
 export function resetLocalNotes() {
   localRecords.length = 0
+  localSeq = 0
 }

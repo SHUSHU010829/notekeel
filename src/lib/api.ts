@@ -47,8 +47,15 @@ export async function deleteNote(id: string): Promise<void> {
   await request<null>(`/api/notes/${id}`, { method: 'DELETE' })
 }
 
-/** 依時間列出筆記 */
-export async function listNotes(limit = 20): Promise<Note[]> {
-  const data = await request<{ notes: Note[] | null }>(`/api/notes?limit=${limit}`)
+/** 依時間列出筆記；給了 tag 就只列該標籤的 */
+export async function listNotes(limit = 20, tag?: string): Promise<Note[]> {
+  const params = new URLSearchParams({ limit: String(limit) })
+  if (tag) params.set('tag', tag)
+  const data = await request<{ notes: Note[] | null }>(`/api/notes?${params}`)
   return data.notes ?? []
+}
+
+/** 替還沒有標籤的筆記補標籤，回傳這次標了幾則、還剩幾則 */
+export function tagUntaggedNotes(): Promise<{ tagged: number; remaining: number }> {
+  return request<{ tagged: number; remaining: number }>('/api/notes/tag', { method: 'POST' })
 }

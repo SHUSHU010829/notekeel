@@ -27,7 +27,7 @@ export default function LoginPage() {
   return (
     <main className="login">
       <div className="login-card">
-        <h1>隨手記</h1>
+        <h1>Notekeel</h1>
         <p className="login-sub">快速記下想法，之後用意思相近的說法就能找回來。</p>
         <button className="btn primary login-btn" onClick={() => void signInWithGoogle()} disabled={busy}>
           {busy ? '前往 Google⋯' : '使用 Google 繼續'}

@@ -1,8 +1,15 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+
+// after() 只能在請求範圍內呼叫；測試直接執行 route handler，這裡把它換成同步執行
+vi.mock('next/server', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('next/server')>()
+  return { ...actual, after: (task: () => unknown) => void task() }
+})
 import { resetLocalNotes } from '../../../lib/server/notes'
 import { GET, POST } from './route'
 import { POST as BULK } from './bulk/route'
 import { DELETE } from './[id]/route'
+import { POST as TAG } from './tag/route'
 import { GET as SEARCH } from './search/route'
 
 // 這些測試跑在「沒設定 Supabase」的本機模式：route handler 走記憶體存取層
@@ -194,6 +201,21 @@ describe('DELETE /api/notes/:id', () => {
       await SEARCH(new Request('http://localhost/api/notes/search?q=獨一無二的關鍵內容'))
     ).json()
     expect(results).toHaveLength(0)
+  })
+})
+
+describe('POST /api/notes/tag', () => {
+  it('沒設定 ANTHROPIC_API_KEY 時回 400 並說明原因', async () => {
+    const response = await TAG()
+    expect(response.status).toBe(400)
+    expect((await response.json()).error).toContain('ANTHROPIC_API_KEY')
+  })
+})
+
+describe('新筆記', () => {
+  it('剛建立時還沒有標籤（背景產生）', async () => {
+    const created = await (await postNote('剛記下的想法')).json()
+    expect(created.tags).toEqual([])
   })
 })
 

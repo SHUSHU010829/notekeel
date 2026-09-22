@@ -1,8 +1,9 @@
-import { NextResponse } from 'next/server'
+import { NextResponse, after } from 'next/server'
 import { MAX_CONTENT_LENGTH } from '../../../../lib/server/config'
 import { embed } from '../../../../lib/server/embedding'
 import { badRequest, errorResponse } from '../../../../lib/server/respond'
 import { notesForRequest } from '../../../../lib/server/session'
+import { tagInBackground } from '../../../../lib/server/tag-notes'
 
 /** 一次最多匯入幾則：Voyage 單一請求的上限與 token 量都要留餘裕 */
 const MAX_BULK = 100
@@ -37,6 +38,8 @@ export async function POST(request: Request) {
     const created = await notes.createMany(
       contents.map((content, index) => ({ content, embedding: embeddings[index] })),
     )
+
+    after(() => tagInBackground(notes, created))
 
     return NextResponse.json({ created: created.length, notes: created }, { status: 201 })
   } catch (error) {

@@ -5,6 +5,8 @@ export interface Note {
   content: string
   /** ISO 8601 */
   createdAt: string
+  /** 自動產生的標籤；還沒標到的是空陣列 */
+  tags: string[]
 }
 
 export interface SearchHit extends Note {

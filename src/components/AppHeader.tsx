@@ -41,9 +41,7 @@ export function AppHeader() {
 
   return (
     <header className="topbar">
-      <div className="brand">
-        隨手記 <span>notekeel</span>
-      </div>
+      <div className="brand">Notekeel</div>
       <nav className="tabs">
         {TABS.map((tab) => (
           <Link key={tab.href} href={tab.href} aria-current={pathname === tab.href ? 'page' : undefined}>

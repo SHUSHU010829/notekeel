@@ -29,6 +29,13 @@ create index if not exists notes_embedding_hnsw
 create index if not exists notes_owner_created_idx
   on notes (owner_id, created_at desc);
 
+-- ---------- 自動標籤 ----------
+-- 既有資料庫重跑這份 schema.sql 就會補上（全部都是 if not exists）。
+alter table notes add column if not exists tags text[] not null default '{}';
+
+-- 依標籤篩選；text[] 的包含查詢要 GIN 才有索引可用
+create index if not exists notes_tags_idx on notes using gin (tags);
+
 -- RLS：與 taskeel 各表同一套寫法
 alter table notes enable row level security;
 
@@ -62,6 +69,7 @@ returns table (
   id         uuid,
   content    text,
   created_at timestamptz,
+  tags       text[],
   similarity float
 )
 language sql
@@ -75,6 +83,7 @@ as $$
     notes.id,
     notes.content,
     notes.created_at,
+    notes.tags,
     1 - (notes.embedding <=> query_embedding) as similarity
   from notes
   where notes.embedding is not null

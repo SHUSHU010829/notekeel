@@ -5,7 +5,8 @@
 ```
 瀏覽器 ─► Next.js（頁面 + route handler，整包跑在 Vercel）
               ├─► Voyage AI            文字 → 向量、候選 → rerank
-              └─► Supabase Postgres    原文 + 向量 + 時間（pgvector）
+              ├─► Claude               自動標籤（背景執行）
+              └─► Supabase Postgres    原文 + 向量 + 標籤 + 時間（pgvector）
 ```
 
 搜尋是兩段式：先用向量從全部筆記粗篩出候選，再用 rerank 模型細排。
@@ -44,6 +45,8 @@ embedder。整條流程（記錄 → 搜尋 → 顯示相似度）可以直接�
 | `SEARCH_RERANK` | 啟用 | 設 `false` 可關掉 rerank |
 | `SEARCH_CANDIDATES` | `30` | 進 rerank 的候選數量 |
 | `RERANK_MIN_SCORE` | `0`（不過濾） | rerank 分數下限；這個分數有校準，比相似度適合當門檻 |
+| `ANTHROPIC_API_KEY` | 空（不標籤） | 設了才會自動標籤 |
+| `ANTHROPIC_MODEL` | `claude-opus-5` | 標籤用的模型 |
 | `EMBEDDING_DIMENSIONS` | `512` | 需與 `notes.embedding` 的維度一致 |
 | `SEARCH_MIN_SIMILARITY` | `0`（不過濾） | 相似度下限，**先留 0**，再用下方的校準腳本量過決定 |
 
@@ -64,6 +67,7 @@ Next.js 專案），把上表的變數填進 Settings → Environment Variables 
 | `GET` | `/api/notes/search?q=...&limit=8` | 語意搜尋 → `{query, results:[{…, similarity}]}` |
 | `GET` | `/api/notes?limit=50` | 依時間新到舊列出 |
 | `DELETE` | `/api/notes/:id` | 刪除自己的一則筆記（成功 `204`，找不到 `404`）|
+| `POST` | `/api/notes/tag` | 替還沒有標籤的筆記補標籤（一次最多 30 則）|
 
 `similarity` 是 0–1 的 cosine 相似度（1 最接近）。未登入回 `401`，
 錯誤一律回 `{"error": "可直接顯示的訊息", "detail": "底層錯誤"}`。
@@ -78,6 +82,19 @@ Next.js 專案），把上表的變數填進 Settings → Environment Variables 
 **Voyage 的 rate limit**：免費方案沒綁付款方式時只有 3 RPM / 10K TPM，
 逐則匯入很快就會被限流（回 429）。批次匯入請走 `/api/notes/bulk`，
 不論幾則都只會用掉一次請求額度。
+
+## 自動標籤
+
+設定 `ANTHROPIC_API_KEY` 後，每則新筆記都會由 Claude 標上 1–3 個標籤。
+
+- **不擋記錄速度**：標籤在回應送出後才用 `after()` 在背景產生，
+  所以按下「記錄」還是立刻完成，標籤晚幾秒才出現。
+- **避免同義詞爆炸**：每次都把使用者現有的標籤一起送進 prompt，
+  要求意思相近時沿用既有標籤，而不是造出「理財 / 財務 / 金錢管理」三個近義詞。
+- **標籤可點**：點卡片上的標籤就會篩出同標籤的筆記。
+- **既有筆記**：記錄頁的「整理標籤」會呼叫 `/api/notes/tag` 補標籤，
+  一次 30 則，回應裡的 `remaining` 會告訴你還剩幾則。
+- 標籤失敗（金鑰錯、模型拒絕）只會寫進 log，不影響筆記本身。
 
 ## 校準相似度門檻
 
@@ -128,6 +145,8 @@ Next.js 專案），把上表的變數填進 Settings → Environment Variables 
 | `src/app/api/notes/` | route handler：新增／列表／搜尋 |
 | `src/lib/server/embedding.ts` | Voyage 串接（document/query 分開、依 index 歸位、429/5xx 重試）與本機假 embedder |
 | `src/lib/server/notes.ts` | 存取層：Supabase（RLS）與本機記憶體兩種實作 |
+| `src/lib/server/tagging.ts` | 呼叫 Claude 產生標籤（結構化輸出，依 index 對回） |
+| `src/lib/server/tag-notes.ts` | 標籤的寫入流程與背景執行的錯誤處理 |
 | `src/lib/server/session.ts` | 取得登入者；未登入丟 401 |
 | `src/lib/supabase/` | 瀏覽器／伺服器端的 Supabase client |
 | `src/middleware.ts` | 更新 session、擋未登入（`/api` 交給 route handler 自己回 401） |

@@ -51,6 +51,33 @@ describe('本機記憶體存取層', () => {
     expect(await aliceNotes.list(10)).toHaveLength(0)
   })
 
+  it('標籤可以寫入、篩選與統計', async () => {
+    const notes = createLocalNotes(alice)
+    const first = await notes.create('房東說租金要漲', [1, 0, 0])
+    const second = await notes.create('報稅要準備收據', [0, 1, 0])
+    await notes.create('還沒標籤的筆記', [0, 0, 1])
+
+    await notes.setTags(first.id, ['租屋', '理財'])
+    await notes.setTags(second.id, ['理財'])
+
+    expect((await notes.list(10, '理財')).map((note) => note.content)).toEqual([
+      '報稅要準備收據',
+      '房東說租金要漲',
+    ])
+    expect((await notes.list(10, '租屋')).map((note) => note.content)).toEqual(['房東說租金要漲'])
+    expect((await notes.listUntagged(10)).map((note) => note.content)).toEqual(['還沒標籤的筆記'])
+    expect(await notes.tagCounts()).toEqual([
+      { tag: '理財', count: 2 },
+      { tag: '租屋', count: 1 },
+    ])
+  })
+
+  it('新筆記預設沒有標籤', async () => {
+    const notes = createLocalNotes(alice)
+    const created = await notes.create('內容', [1, 0, 0])
+    expect(created.tags).toEqual([])
+  })
+
   it('列表依時間新到舊', async () => {
     const notes = createLocalNotes(alice)
     await notes.create('第一則', [1, 0, 0])
@@ -75,7 +102,12 @@ describe('Supabase 存取層', () => {
             return {
               select: () => ({
                 single: async () => ({
-                  data: { id: 'note-1', content: '內容', created_at: '2026-09-22T00:00:00Z' },
+                  data: {
+                    id: 'note-1',
+                    content: '內容',
+                    created_at: '2026-09-22T00:00:00Z',
+                    tags: ['理財'],
+                  },
                   error: null,
                 }),
               }),
@@ -89,7 +121,14 @@ describe('Supabase 存取層', () => {
                   limit: async (value: number) => {
                     calls.limit = value
                     return {
-                      data: [{ id: 'note-1', content: '內容', created_at: '2026-09-22T00:00:00Z' }],
+                      data: [
+                        {
+                          id: 'note-1',
+                          content: '內容',
+                          created_at: '2026-09-22T00:00:00Z',
+                          tags: [],
+                        },
+                      ],
                       error: null,
                     }
                   },
@@ -103,7 +142,13 @@ describe('Supabase 存取層', () => {
         calls.rpc = [name, args]
         return {
           data: [
-            { id: 'note-1', content: '內容', created_at: '2026-09-22T00:00:00Z', similarity: 0.87 },
+            {
+              id: 'note-1',
+              content: '內容',
+              created_at: '2026-09-22T00:00:00Z',
+              tags: ['理財'],
+              similarity: 0.87,
+            },
           ],
           error: null,
           ...(overrides.rpcResult as object | undefined),
@@ -120,7 +165,12 @@ describe('Supabase 存取層', () => {
 
     expect(calls.table).toBe('notes')
     expect(calls.inserted).toEqual({ owner_id: ownerId, content: '內容', embedding: [0.1, 0.2] })
-    expect(created).toEqual({ id: 'note-1', content: '內容', createdAt: '2026-09-22T00:00:00Z' })
+    expect(created).toEqual({
+      id: 'note-1',
+      content: '內容',
+      createdAt: '2026-09-22T00:00:00Z',
+      tags: ['理財'],
+    })
   })
 
   it('搜尋呼叫 match_notes 並帶入筆數與相似度下限', async () => {
@@ -135,6 +185,7 @@ describe('Supabase 存取層', () => {
       id: 'note-1',
       content: '內容',
       createdAt: '2026-09-22T00:00:00Z',
+      tags: ['理財'],
       similarity: 0.87,
     })
   })

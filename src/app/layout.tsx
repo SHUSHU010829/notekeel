@@ -3,10 +3,10 @@ import { AppHeader } from '../components/AppHeader'
 import './globals.css'
 
 export const metadata: Metadata = {
-  title: '隨手記',
+  title: 'Notekeel',
   description: '快速記下想法，之後用意思相近的說法就能找回來。',
   manifest: '/manifest.webmanifest',
-  appleWebApp: { capable: true, title: '隨手記', statusBarStyle: 'default' },
+  appleWebApp: { capable: true, title: 'Notekeel', statusBarStyle: 'default' },
 }
 
 export const viewport: Viewport = {

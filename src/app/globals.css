@@ -261,6 +261,15 @@ button, input, textarea { font: inherit; color: inherit; }
   font-size: 12.5px;
 }
 
+.section-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.section-head .section-label { margin-bottom: 10px; }
+
 .notes { display: flex; flex-direction: column; gap: 8px; }
 
 .note {
@@ -295,6 +304,42 @@ button, input, textarea { font: inherit; color: inherit; }
   margin-top: 10px;
   color: var(--text-subtle);
   font-size: 12.5px;
+}
+
+/* 標籤 */
+.note-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 10px;
+}
+
+.tag {
+  padding: 2px 9px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--surface-muted);
+  color: var(--text-muted);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+button.tag { cursor: pointer; }
+button.tag:hover { border-color: var(--accent); color: var(--accent); }
+
+.tag.active {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--accent-text);
+}
+
+/* 標籤篩選列 */
+.tagbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin: 18px 0 0;
 }
 
 /* 刪除等操作靠右，平常低調、hover 才明顯 */
