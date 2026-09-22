@@ -39,7 +39,7 @@ embedder。整條流程（記錄 → 搜尋 → 顯示相似度）可以直接�
 | `VOYAGE_API_KEY` | 空（假 embedder） | Voyage AI 金鑰，**伺服器端專用** |
 | `VOYAGE_MODEL` | `voyage-4-lite` | embedding 模型 |
 | `EMBEDDING_DIMENSIONS` | `512` | 需與 `notes.embedding` 的維度一致 |
-| `SEARCH_MIN_SIMILARITY` | `0`（不過濾） | 相似度下限，接上真實向量後建議 0.4–0.6 |
+| `SEARCH_MIN_SIMILARITY` | `0`（不過濾） | 相似度下限，**先留 0**，再用下方的校準腳本量過決定 |
 
 ## 部署
 
@@ -61,9 +61,21 @@ Next.js 專案），把上表的變數填進 Settings → Environment Variables 
 `similarity` 是 0–1 的 cosine 相似度（1 最接近）。未登入回 `401`，
 錯誤一律回 `{"error": "可直接顯示的訊息", "detail": "底層錯誤"}`。
 
+搜尋可以用 `?min=0.3` 臨時覆寫相似度下限（不用改環境變數重新部署），
+回應裡的 `minSimilarity` 會告訴你這次實際套用的值。
+
 **Voyage 的 rate limit**：免費方案沒綁付款方式時只有 3 RPM / 10K TPM，
 逐則匯入很快就會被限流（回 429）。批次匯入請走 `/api/notes/bulk`，
 不論幾則都只會用掉一次請求額度。
+
+## 校準相似度門檻
+
+`SEARCH_MIN_SIMILARITY` 設太高，最常見的症狀是「只有內容剛好包含搜尋字的筆記才找得到」——
+那等於退化成關鍵字比對，語意搜尋的意義就沒了。合適的值取決於模型與內容，**不要憑感覺設**。
+
+灌完測資後，在登入的網頁主控台貼上 [`scripts/calibrate-browser.js`](scripts/calibrate-browser.js)：
+它會用幾組用詞完全不同的查詢（外加一組刻意無關的反例）在 `min=0` 下實測，
+印出「該找到的最低分」與「無關查詢的最高分」，並建議取中間值當門檻。
 
 ## 程式結構
 

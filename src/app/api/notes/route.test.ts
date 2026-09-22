@@ -84,6 +84,29 @@ describe('GET /api/notes/search', () => {
     expect(results[0].similarity).toBeGreaterThan(0)
   })
 
+  it('回應帶上這次實際套用的相似度下限', async () => {
+    await postNote('一則筆記')
+    const { minSimilarity } = await (
+      await SEARCH(new Request('http://localhost/api/notes/search?q=筆記'))
+    ).json()
+    expect(minSimilarity).toBe(0)
+  })
+
+  it('?min= 可以臨時覆寫門檻，不合法的值則忽略', async () => {
+    await postNote('完全無關的內容')
+
+    const filtered = await (
+      await SEARCH(new Request('http://localhost/api/notes/search?q=毫不相干的查詢&min=0.99'))
+    ).json()
+    expect(filtered.minSimilarity).toBe(0.99)
+    expect(filtered.results).toHaveLength(0)
+
+    const ignored = await (
+      await SEARCH(new Request('http://localhost/api/notes/search?q=內容&min=abc'))
+    ).json()
+    expect(ignored.minSimilarity).toBe(0)
+  })
+
   it('沒帶 q 回 400', async () => {
     const response = await SEARCH(new Request('http://localhost/api/notes/search'))
     expect(response.status).toBe(400)
