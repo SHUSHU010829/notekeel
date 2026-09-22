@@ -25,8 +25,9 @@ embedder。整條流程（記錄 → 搜尋 → 顯示相似度）可以直接�
 ## 接上 Supabase 與 Voyage
 
 1. **建資料表**：Supabase → SQL Editor 貼上 [`supabase/schema.sql`](supabase/schema.sql) 執行一次。
-   它會建立 `notes`（含指向 `auth.users` 的外鍵、RLS 政策）與語意搜尋用的
-   `match_notes()` function，不會動到 taskeel 既有的任何表。
+   它會建立 `notes`（含指向 `auth.users` 的外鍵、RLS 政策、`authenticated` 的表格權限）
+   與語意搜尋用的 `match_notes()` function，不會動到 taskeel 既有的任何表。
+   整份腳本可重複執行；SQL Editor 是包在一個 transaction 裡跑，中途出錯會整份 rollback。
 2. **登入設定**：Supabase → Authentication → URL Configuration，把
    `https://<你的網域>/auth/callback` 加進允許清單。Google provider 沿用 taskeel 既有設定。
 3. **環境變數**：`cp .env.example .env.local` 後填入。
@@ -82,9 +83,28 @@ create policy "own notes" on notes
   for all using (owner_id = auth.uid()) with check (owner_id = auth.uid());
 ```
 
-route handler 用的是**使用者自己的 session**（anon key + cookie），不是 service role，
+route handler 用的是**使用者自己的 session**（publishable key + cookie），不是 secret key，
 所以資料庫層就擋住了跨使用者存取 —— 應用層寫錯也偷不到別人的筆記。
 `match_notes()` 宣告為 `security invoker`，搜尋同樣受 RLS 約束。
+
+表格權限只給 `authenticated`（RLS 管「哪些列」，GRANT 管「能不能碰這張表」，兩層都要）；
+未登入的 `anon` 角色連 `notes` 都讀不到。
+
+## 範例測資
+
+`scripts/seed-notes.json` 有 26 則範例筆記，用詞刻意與預期的搜尋字不同，方便驗證
+語意搜尋（而不是字面比對）：
+
+```bash
+node scripts/seed.mjs                                  # 灌進本機跑著的 app
+VOYAGE_API_KEY=... node scripts/seed.mjs --sql --email you@example.com > seed.sql
+```
+
+`--sql` 會用 Voyage 算好向量再輸出 INSERT，貼進 SQL Editor 執行即可；
+它強制要金鑰，因為本機假 embedder 產生的向量與線上查詢不在同一個空間，灌進去會搜不準。
+
+灌完可以試試「房東 漲價 → 租金調漲」「腰痛 運動 → 深蹲要練核心」
+「向量資料庫 索引 → pgvector HNSW」這類用詞不同的查詢。
 
 ## 測試
 

@@ -43,6 +43,13 @@ begin
   end if;
 end $$;
 
+-- ---------- 權限 ----------
+-- RLS 決定「看得到哪些列」，GRANT 決定「這個角色能不能碰這張表」，兩者缺一不可。
+-- 新的 Supabase 專案不會自動授權用 SQL 建立的表，沒有這段會得到：
+--   permission denied for table notes (42501)
+-- 只給 authenticated：沒登入的 anon 不該碰到任何筆記。
+grant select, insert, update, delete on table notes to authenticated;
+
 -- ---------- 語意搜尋 ----------
 -- PostgREST 沒辦法直接下 `<=>` 排序，所以包成 function。
 -- security invoker：RLS 照常生效，只會搜到自己的筆記。
@@ -75,3 +82,6 @@ as $$
   order by notes.embedding <=> query_embedding
   limit match_count
 $$;
+
+-- function 的 execute 權限同樣要明確給
+grant execute on function match_notes(vector, int, float) to authenticated;
