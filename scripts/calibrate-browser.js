@@ -19,8 +19,16 @@
 
   const rows = []
 
+  console.log(
+    `共 ${cases.length} 組，每組間隔 ${INTERVAL_MS / 1000} 秒（配合 Voyage 免費方案 3 RPM），` +
+      `預計 ${Math.round(((cases.length - 1) * INTERVAL_MS) / 1000)} 秒跑完。結果會邊跑邊印。`,
+  )
+
   for (const [index, testCase] of cases.entries()) {
-    if (index > 0) await new Promise((resolve) => setTimeout(resolve, INTERVAL_MS))
+    if (index > 0) {
+      console.log(`⏳ 等 ${INTERVAL_MS / 1000} 秒再查下一組（剩 ${cases.length - index} 組）…`)
+      await new Promise((resolve) => setTimeout(resolve, INTERVAL_MS))
+    }
 
     const params = new URLSearchParams({ q: testCase.query, min: '0', limit: '3' })
     const response = await fetch(`/api/notes/search?${params}`)
@@ -41,7 +49,24 @@
         hit >= 0 ? Number(results[hit].similarity.toFixed(3)) : testCase.expect ? null : '—',
       最高分的內容: top ? top.content.slice(0, 18) + '…' : '(無結果)',
     })
-    console.log(`${index + 1}/${cases.length} 完成：${testCase.query}`)
+    // 邊跑邊印，中途停掉也看得到已經量到的分數
+    const topScore = top ? top.similarity.toFixed(3) : '—'
+    if (!testCase.expect) {
+      console.log(
+        `${index + 1}/${cases.length}　「${testCase.query}」（反例）最高分 ${topScore}　` +
+          `${top ? top.content.slice(0, 16) + '…' : '(無結果)'}`,
+      )
+    } else if (hit === -1) {
+      console.warn(
+        `${index + 1}/${cases.length}　「${testCase.query}」沒在前三名找到含「${testCase.expect}」的筆記　` +
+          `最高分 ${topScore}：${top ? top.content.slice(0, 16) + '…' : '(無結果)'}`,
+      )
+    } else {
+      console.log(
+        `${index + 1}/${cases.length}　「${testCase.query}」命中第 ${hit + 1} 名　` +
+          `分數 ${results[hit].similarity.toFixed(3)}（最高分 ${topScore}）：${results[hit].content.slice(0, 16)}…`,
+      )
+    }
   }
 
   console.table(rows)
