@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { resetLocalNotes } from '../../../lib/server/notes'
 import { GET, POST } from './route'
+import { POST as BULK } from './bulk/route'
 import { GET as SEARCH } from './search/route'
 
 // 這些測試跑在「沒設定 Supabase」的本機模式：route handler 走記憶體存取層
@@ -87,6 +88,47 @@ describe('GET /api/notes/search', () => {
     const response = await SEARCH(new Request('http://localhost/api/notes/search'))
     expect(response.status).toBe(400)
     expect((await response.json()).error).toBe('請輸入搜尋關鍵字')
+  })
+})
+
+function bulk(contents: unknown) {
+  return BULK(
+    new Request('http://localhost/api/notes/bulk', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ contents }),
+    }),
+  )
+}
+
+describe('POST /api/notes/bulk', () => {
+  it('一次匯入多則，之後列表與搜尋都找得到', async () => {
+    const response = await bulk(['第一則匯入', '第二則匯入', '第三則匯入'])
+    expect(response.status).toBe(201)
+
+    const body = await response.json()
+    expect(body.created).toBe(3)
+    expect(body.notes).toHaveLength(3)
+
+    const { notes } = await (await GET(new Request('http://localhost/api/notes'))).json()
+    expect(notes).toHaveLength(3)
+  })
+
+  it('去掉空白後為空的項目會被略過', async () => {
+    const body = await (await bulk(['有內容', '   ', '', '也有內容'])).json()
+    expect(body.created).toBe(2)
+  })
+
+  it('格式不對或全空回 400', async () => {
+    expect((await bulk('不是陣列')).status).toBe(400)
+    expect((await bulk([])).status).toBe(400)
+    expect((await bulk(['  ', ''])).status).toBe(400)
+  })
+
+  it('超過單次上限回 400', async () => {
+    const response = await bulk(Array.from({ length: 101 }, (_, i) => `第 ${i} 則`))
+    expect(response.status).toBe(400)
+    expect((await response.json()).error).toContain('一次最多')
   })
 })
 

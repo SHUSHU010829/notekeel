@@ -46,8 +46,10 @@ export async function embedWithVoyage(
   })
 
   let lastError: Error = new EmbeddingError('轉換向量失敗')
+  let nextDelayMs = 0
+
   for (let attempt = 0; attempt <= maxRetries; attempt += 1) {
-    if (attempt > 0) await new Promise((resolve) => setTimeout(resolve, attempt * 400))
+    if (nextDelayMs > 0) await new Promise((resolve) => setTimeout(resolve, nextDelayMs))
 
     let response: Response
     try {
@@ -58,14 +60,23 @@ export async function embedWithVoyage(
       })
     } catch {
       lastError = new EmbeddingError('連不上 Voyage，請稍後再試。')
+      nextDelayMs = backoffMs(attempt)
       continue
     }
 
     if (!response.ok) {
       const detail = (await response.text().catch(() => '')).slice(0, 200)
-      lastError = new EmbeddingError(`Voyage 回應 ${response.status}：${detail}`)
+      const prefix =
+        response.status === 429
+          ? 'Voyage 限流（免費方案未綁付款方式只有 3 RPM）'
+          : `Voyage 回應 ${response.status}`
+      lastError = new EmbeddingError(`${prefix}：${detail}`)
+
       // 4xx（金鑰錯、參數錯）重試也沒用
       if (response.status !== 429 && response.status < 500) throw lastError
+
+      // 429 優先照 Retry-After 等；但函式有執行時間上限，等太久不如讓前端重試
+      nextDelayMs = retryAfterMs(response) ?? backoffMs(attempt)
       continue
     }
 
@@ -89,6 +100,20 @@ export async function embedWithVoyage(
   }
 
   throw lastError
+}
+
+/** 指數退避：0.5s → 1s → 2s，上限 2 秒 */
+function backoffMs(attempt: number): number {
+  return Math.min(500 * 2 ** attempt, 2000)
+}
+
+function retryAfterMs(response: Response): number | undefined {
+  const header = response.headers.get('Retry-After')
+  if (!header) return undefined
+  const seconds = Number(header)
+  if (!Number.isFinite(seconds) || seconds <= 0) return undefined
+  // serverless function 有執行時間上限，最多只等 3 秒
+  return Math.min(seconds * 1000, 3000)
 }
 
 /**

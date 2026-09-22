@@ -1,6 +1,9 @@
 // notekeel 範例測資 —— 在「已登入的隨手記網頁」上打開瀏覽器主控台（F12 → Console），
-// 整段貼上後按 Enter。它打的是同源的 /api/notes，會自動帶上你的登入 cookie，
-// 向量由伺服器用你設定的 Voyage 金鑰產生，跟平常手動記錄走的是同一條路。
+// 整段貼上後按 Enter。它打的是同源的 /api/notes/bulk，會自動帶上你的登入 cookie。
+//
+// 走 bulk 端點的原因：所有內容會併成「一個」Voyage 請求，
+// 免費方案沒綁付款方式時只有 3 RPM，逐則送到第 4 則就會被限流。
+// 已經存在的相同內容會自動略過，重跑不會灌出重複資料。
 //
 // 內容由 scripts/seed-notes.json 產生（有測試確保兩邊一致），要改請改那一份。
 ;(async () => {
@@ -33,23 +36,28 @@
     "跟同事聊到職涯，他說與其追求升遷，不如先確認自己想解決哪一類問題",
   ]
 
-  let ok = 0
-  for (const content of notes) {
-    const response = await fetch('/api/notes', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ content }),
-    })
+  const existing = new Set(
+    ((await (await fetch('/api/notes?limit=200')).json()).notes ?? []).map((note) => note.content),
+  )
+  const pending = notes.filter((content) => !existing.has(content))
 
-    if (!response.ok) {
-      console.error(`✗ ${response.status}`, await response.text())
-      console.error('中斷。已寫入 ' + ok + ' 則。')
-      return
-    }
+  if (pending.length === 0) {
+    console.log('已經全部存在，不需要再灌。')
+    return
+  }
+  console.log(`準備寫入 ${pending.length} 則（略過已存在的 ${notes.length - pending.length} 則）…`)
 
-    ok += 1
-    console.log(`${ok}/${notes.length}`, content.slice(0, 24) + '…')
+  const response = await fetch('/api/notes/bulk', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ contents: pending }),
+  })
+
+  if (!response.ok) {
+    console.error(`✗ ${response.status}`, await response.text())
+    return
   }
 
-  console.log(`完成：寫入 ${ok}/${notes.length} 則，重新整理頁面就看得到。`)
+  const { created } = await response.json()
+  console.log(`完成：寫入 ${created} 則，重新整理頁面就看得到。`)
 })()

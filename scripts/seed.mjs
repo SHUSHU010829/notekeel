@@ -26,34 +26,32 @@ if (args.includes('--sql')) {
   await postToApp()
 }
 
-/** 模式一：打本機 app 的 API，讓它自己算向量、自己寫進資料庫。 */
+/**
+ * 模式一：打 app 的 bulk API，讓它自己算向量、自己寫進資料庫。
+ * 走 bulk 是因為所有內容會併成一個 Voyage 請求，不會撞到免費方案的 3 RPM。
+ */
 async function postToApp() {
   const baseUrl = String(flag('--url') ?? 'http://localhost:3000').replace(/\/+$/, '')
-  let ok = 0
 
-  for (const content of notes) {
-    const response = await fetch(`${baseUrl}/api/notes`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ content }),
-    })
+  const response = await fetch(`${baseUrl}/api/notes/bulk`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ contents: notes }),
+  })
 
-    if (response.ok) {
-      ok += 1
-      process.stdout.write('.')
-      continue
-    }
-
+  if (!response.ok) {
     const detail = await response.text().catch(() => '')
-    console.error(`\n✗ ${response.status} ${content.slice(0, 20)}…　${detail.slice(0, 120)}`)
+    console.error(`✗ ${response.status} ${detail.slice(0, 300)}`)
     if (response.status === 401) {
       console.error('\n需要登入。這個模式只適合沒設定 Supabase 的本機開發環境；')
-      console.error('要灌進正式資料庫請改用：node scripts/seed.mjs --sql --email you@example.com')
-      process.exit(1)
+      console.error('已部署的環境請在瀏覽器主控台貼 scripts/seed-browser.js，')
+      console.error('或用：node scripts/seed.mjs --sql --email you@example.com')
     }
+    process.exit(1)
   }
 
-  console.log(`\n完成：寫入 ${ok}/${notes.length} 則到 ${baseUrl}`)
+  const { created } = await response.json()
+  console.log(`完成：寫入 ${created}/${notes.length} 則到 ${baseUrl}`)
 }
 
 /** 模式二：產生 SQL（含向量），貼到 Supabase SQL Editor 執行。 */

@@ -59,6 +59,22 @@ describe('Voyage embeddings', () => {
     expect(calls).toBe(2)
   })
 
+  it('被限流（429）會重試，錯誤訊息點出免費方案的 RPM 限制', async () => {
+    let calls = 0
+    mockFetch(() => {
+      calls += 1
+      return new Response('{"detail":"reduced rate limits of 3 RPM"}', {
+        status: 429,
+        headers: { 'Retry-After': '1' },
+      })
+    })
+
+    await expect(embedWithVoyage(['內容'], 'document', { ...options, maxRetries: 1 })).rejects.toThrow(
+      /3 RPM/,
+    )
+    expect(calls).toBe(2)
+  })
+
   it('金鑰錯誤（401）不重試，直接拋錯', async () => {
     let calls = 0
     mockFetch(() => {

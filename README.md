@@ -54,11 +54,16 @@ Next.js 專案），把上表的變數填進 Settings → Environment Variables 
 | Method | Path | 說明 |
 | --- | --- | --- |
 | `POST` | `/api/notes` | 新增筆記：`{"content": "..."}` → `{id, content, createdAt}` |
+| `POST` | `/api/notes/bulk` | 一次匯入多則：`{"contents": ["…"]}`（上限 100 則，只用一次 Voyage 請求） |
 | `GET` | `/api/notes/search?q=...&limit=8` | 語意搜尋 → `{query, results:[{…, similarity}]}` |
 | `GET` | `/api/notes?limit=50` | 依時間新到舊列出 |
 
 `similarity` 是 0–1 的 cosine 相似度（1 最接近）。未登入回 `401`，
-錯誤一律回 `{"error": "可直接顯示的訊息"}`。
+錯誤一律回 `{"error": "可直接顯示的訊息", "detail": "底層錯誤"}`。
+
+**Voyage 的 rate limit**：免費方案沒綁付款方式時只有 3 RPM / 10K TPM，
+逐則匯入很快就會被限流（回 429）。批次匯入請走 `/api/notes/bulk`，
+不論幾則都只會用掉一次請求額度。
 
 ## 程式結構
 
@@ -98,7 +103,8 @@ route handler 用的是**使用者自己的 session**（publishable key + cookie
 **已部署到 Vercel、想灌進正式資料庫**（最省事，不需要本機環境）：
 登入隨手記網頁 → 開瀏覽器主控台（F12 → Console）→ 貼上
 [`scripts/seed-browser.js`](scripts/seed-browser.js) 整段執行。
-它打的是同源的 `/api/notes`，自動帶登入 cookie，向量由伺服器端的 Voyage 產生。
+它打的是同源的 `/api/notes/bulk`，自動帶登入 cookie，向量由伺服器端的 Voyage 產生。
+已存在的相同內容會自動略過，重跑不會產生重複資料。
 
 **在本機開發**：
 

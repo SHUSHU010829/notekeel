@@ -7,8 +7,15 @@ import type { Note, SearchHit } from '../types'
  * 正式環境走 Supabase（RLS 負責只讓使用者看到自己的資料）；
  * 沒設定 Supabase 時退回記憶體版，讓本機零設定就能跑。
  */
+export interface NewNote {
+  content: string
+  embedding: number[]
+}
+
 export interface NotesStore {
   create(content: string, embedding: number[]): Promise<Note>
+  /** 一次寫入多則：匯入時可以把 embedding 併成一個 Voyage 請求，省下大量 rate limit */
+  createMany(items: NewNote[]): Promise<Note[]>
   search(embedding: number[], limit: number, minSimilarity: number): Promise<SearchHit[]>
   list(limit: number): Promise<Note[]>
 }
@@ -36,6 +43,18 @@ export function createSupabaseNotes(client: SupabaseClient, ownerId: string): No
 
       if (error) throw storeError(error)
       return toNote(data)
+    },
+
+    async createMany(items) {
+      if (items.length === 0) return []
+
+      const { data, error } = await client
+        .from('notes')
+        .insert(items.map((item) => ({ owner_id: ownerId, content: item.content, embedding: item.embedding })))
+        .select('id, content, created_at')
+
+      if (error) throw storeError(error)
+      return ((data ?? []) as RawNote[]).map(toNote)
     },
 
     async search(embedding, limit, minSimilarity) {
@@ -112,6 +131,12 @@ export function createLocalNotes(ownerId: string): NotesStore {
       }
       localRecords.push({ ownerId, note, embedding })
       return note
+    },
+
+    async createMany(items) {
+      const created: Note[] = []
+      for (const item of items) created.push(await this.create(item.content, item.embedding))
+      return created
     },
 
     async search(embedding, limit, minSimilarity) {
