@@ -1,0 +1,115 @@
+import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { resetLocalNotes } from '../../../lib/server/notes'
+import { GET, POST } from './route'
+import { GET as SEARCH } from './search/route'
+
+// 這些測試跑在「沒設定 Supabase」的本機模式：route handler 走記憶體存取層
+// 與本機假 embedder，因此可以端到端地驗證驗證邏輯與回應格式。
+beforeEach(resetLocalNotes)
+
+function postNote(content: unknown) {
+  return POST(
+    new Request('http://localhost/api/notes', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ content }),
+    }),
+  )
+}
+
+describe('POST /api/notes', () => {
+  it('新增成功回 201 與筆記本體', async () => {
+    const response = await postNote('用 pgvector 做語意搜尋的筆記')
+    expect(response.status).toBe(201)
+
+    const created = await response.json()
+    expect(created.content).toBe('用 pgvector 做語意搜尋的筆記')
+    expect(created.id).toBeTruthy()
+    expect(created.createdAt).toBeTruthy()
+  })
+
+  it('內容前後空白會被去掉', async () => {
+    const created = await (await postNote('   有空白   ')).json()
+    expect(created.content).toBe('有空白')
+  })
+
+  it('空內容回 400 與可顯示的訊息', async () => {
+    const response = await postNote('   \n ')
+    expect(response.status).toBe(400)
+    expect((await response.json()).error).toBe('筆記內容不可為空')
+  })
+
+  it('過長內容回 400', async () => {
+    const response = await postNote('字'.repeat(20001))
+    expect(response.status).toBe(400)
+  })
+
+  it('壞掉的 JSON 回 400', async () => {
+    const response = await POST(
+      new Request('http://localhost/api/notes', { method: 'POST', body: '{not json' }),
+    )
+    expect(response.status).toBe(400)
+  })
+})
+
+describe('GET /api/notes', () => {
+  it('列出剛才記下的筆記，新的在前', async () => {
+    await postNote('第一則')
+    await new Promise((resolve) => setTimeout(resolve, 2))
+    await postNote('第二則')
+
+    const { notes } = await (await GET(new Request('http://localhost/api/notes'))).json()
+    expect(notes.map((note: { content: string }) => note.content)).toEqual(['第二則', '第一則'])
+  })
+
+  it('limit 會被收斂在上限內', async () => {
+    await postNote('一則')
+    const response = await GET(new Request('http://localhost/api/notes?limit=99999'))
+    expect(response.status).toBe(200)
+  })
+})
+
+describe('GET /api/notes/search', () => {
+  it('找回相近的筆記並附上相似度', async () => {
+    await postNote('pgvector 的 HNSW 索引不需要先訓練')
+    await postNote('晚餐想吃拉麵')
+
+    const response = await SEARCH(new Request('http://localhost/api/notes/search?q=HNSW 索引'))
+    expect(response.status).toBe(200)
+
+    const { query, results } = await response.json()
+    expect(query).toBe('HNSW 索引')
+    expect(results[0].content).toContain('HNSW')
+    expect(results[0].similarity).toBeGreaterThan(0)
+  })
+
+  it('沒帶 q 回 400', async () => {
+    const response = await SEARCH(new Request('http://localhost/api/notes/search'))
+    expect(response.status).toBe(400)
+    expect((await response.json()).error).toBe('請輸入搜尋關鍵字')
+  })
+})
+
+describe('登入狀態', () => {
+  it('設定了 Supabase 但沒有登入時回 401', async () => {
+    vi.resetModules()
+    vi.doMock('../../../lib/supabase/env', () => ({
+      SUPABASE_URL: 'https://example.supabase.co',
+      SUPABASE_ANON_KEY: 'anon',
+      authEnabled: true,
+    }))
+    vi.doMock('../../../lib/supabase/server', () => ({
+      createClient: async () => ({ auth: { getUser: async () => ({ data: { user: null } }) } }),
+    }))
+
+    const { POST: guardedPost } = await import('./route')
+    const response = await guardedPost(
+      new Request('http://localhost/api/notes', { method: 'POST', body: JSON.stringify({ content: '嗨' }) }),
+    )
+
+    expect(response.status).toBe(401)
+    expect((await response.json()).error).toBe('請先登入')
+    vi.doUnmock('../../../lib/supabase/env')
+    vi.doUnmock('../../../lib/supabase/server')
+  })
+})
