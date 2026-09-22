@@ -95,15 +95,15 @@ a {
 .shell {
   max-width: 680px;
   margin: 0 auto;
-  padding: 0 16px calc(48px + env(safe-area-inset-bottom));
+  padding: 12px 16px calc(56px + env(safe-area-inset-bottom));
 }
 
 .topbar {
   display: flex;
   align-items: center;
-  gap: 8px;
-  height: 48px;
-  margin-bottom: 20px;
+  gap: 16px;
+  height: 64px;
+  margin-bottom: 32px;
   border-bottom: 1px solid var(--border);
 }
 
@@ -124,12 +124,12 @@ a {
 .tabs {
   display: inline-flex;
   align-items: center;
-  gap: 2px;
+  gap: 4px;
   margin-left: auto;
 }
 
 .tabs a {
-  padding: 4px 12px;
+  padding: 6px 14px;
   border-radius: var(--radius);
   color: var(--text-dim);
   font-size: 0.8667rem;
@@ -155,8 +155,8 @@ a {
   display: flex;
   align-items: center;
   gap: 8px;
-  max-width: 180px;
-  padding: 4px 8px 4px 4px;
+  max-width: 200px;
+  padding: 5px 10px 5px 5px;
   border: 1px solid var(--border);
   border-radius: var(--radius);
   background: transparent;
@@ -183,11 +183,9 @@ a {
   text-transform: uppercase;
 }
 
-/* 使用者識別就是 id，用等寬字比較好對 */
-.acct-id {
+.acct-name {
   overflow: hidden;
-  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-  font-size: 0.8rem;
+  font-size: 0.8667rem;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -197,7 +195,7 @@ a {
   top: calc(100% + 4px);
   right: 0;
   z-index: 20;
-  width: 264px;
+  width: 232px;
   padding: 4px;
   background: var(--bg-elevated);
   border: 1px solid var(--border-strong);
@@ -205,23 +203,23 @@ a {
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
 }
 
-.acct-hint {
-  padding: 4px 8px 2px;
-  color: var(--text-faint);
-  font-size: 0.7333rem;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
+/* 選單頂端就是「你是誰」：名字在上，email 在下 */
+.acct-who {
+  padding: 6px 8px 8px;
 }
 
-/* 完整 id 攤開來顯示，要複製、要對帳都看得到 */
-.acct-id-full {
-  padding: 0 8px 6px;
+.acct-who-name {
   color: var(--text);
-  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-  font-size: 0.7333rem;
-  line-height: 1.5;
+  font-size: 0.8667rem;
+  font-weight: 500;
   overflow-wrap: anywhere;
-  user-select: all;
+}
+
+.acct-who-email {
+  margin-top: 2px;
+  color: var(--text-faint);
+  font-size: 0.7333rem;
+  overflow-wrap: anywhere;
 }
 
 .acct-sep {

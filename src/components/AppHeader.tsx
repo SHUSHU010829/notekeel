@@ -10,17 +10,21 @@ const TABS = [
   { href: '/search', label: '搜尋' },
 ]
 
-/** 按鈕塞不下整串 uuid，前 8 碼已經足以認人，完整的放在選單裡。 */
-function shortId(id: string) {
-  return id.length > 8 ? `${id.slice(0, 8)}…` : id
+interface Account {
+  name: string
+  email: string
+}
+
+/** 與 taskeel 取同一個順序的名字，兩邊看到的稱呼才會一樣。 */
+function accountName(meta: Record<string, string | undefined>, email: string) {
+  return meta.full_name || meta.name || meta.user_name || email || '使用者'
 }
 
 export function AppHeader() {
   const pathname = usePathname()
   const router = useRouter()
-  const [userId, setUserId] = useState<string | null>(null)
+  const [account, setAccount] = useState<Account | null>(null)
   const [open, setOpen] = useState(false)
-  const [copied, setCopied] = useState(false)
   const [theme, setTheme] = useState<'dark' | 'light'>('dark')
   const acctRef = useRef<HTMLDivElement>(null)
 
@@ -30,7 +34,10 @@ export function AppHeader() {
 
     let cancelled = false
     supabase.auth.getUser().then(({ data }) => {
-      if (!cancelled) setUserId(data.user?.id ?? null)
+      if (cancelled || !data.user) return
+      const meta = (data.user.user_metadata ?? {}) as Record<string, string | undefined>
+      const email = data.user.email ?? ''
+      setAccount({ name: accountName(meta, email), email })
     })
     return () => {
       cancelled = true
@@ -62,12 +69,6 @@ export function AppHeader() {
     }
   }, [open])
 
-  useEffect(() => {
-    if (!copied) return
-    const timer = setTimeout(() => setCopied(false), 1600)
-    return () => clearTimeout(timer)
-  }, [copied])
-
   function toggleTheme() {
     const next = theme === 'dark' ? 'light' : 'dark'
     setTheme(next)
@@ -76,16 +77,6 @@ export function AppHeader() {
       localStorage.setItem('notekeel.theme', next)
     } catch {
       // 無痕模式寫不進去，換色本身仍然有效
-    }
-  }
-
-  async function copyId() {
-    if (!userId) return
-    try {
-      await navigator.clipboard.writeText(userId)
-      setCopied(true)
-    } catch {
-      // 沒有剪貼簿權限就算了，選單裡的 id 本來就可以自己選取
     }
   }
 
@@ -127,27 +118,28 @@ export function AppHeader() {
         ))}
       </nav>
 
-      {userId ? (
+      {account ? (
         <div className="acct" ref={acctRef}>
           <button
             className="acct-button"
             onClick={() => setOpen((prev) => !prev)}
             aria-expanded={open}
             aria-haspopup="menu"
-            title={userId}
+            title={account.email || account.name}
           >
-            <span className="acct-avatar">{userId[0]}</span>
-            <span className="acct-id">{shortId(userId)}</span>
+            <span className="acct-avatar">{account.name[0]}</span>
+            <span className="acct-name">{account.name}</span>
           </button>
 
           {open ? (
             <div className="acct-menu" role="menu">
-              <div className="acct-hint">使用者 ID</div>
-              <div className="acct-id-full">{userId}</div>
+              <div className="acct-who">
+                <div className="acct-who-name">{account.name}</div>
+                {account.email && account.email !== account.name ? (
+                  <div className="acct-who-email">{account.email}</div>
+                ) : null}
+              </div>
               <div className="acct-sep" />
-              <button className="acct-item" role="menuitem" onClick={() => void copyId()}>
-                {copied ? '已複製' : '複製 ID'}
-              </button>
               <button className="acct-item" role="menuitem" onClick={toggleTheme}>
                 {theme === 'dark' ? '切換為淺色' : '切換為深色'}
               </button>
