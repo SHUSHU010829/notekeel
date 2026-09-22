@@ -1,0 +1,35 @@
+# Fly.io 部署設定。第一次部署：
+#   fly launch --no-deploy --copy-config
+#   fly secrets set VOYAGE_API_KEY=... DATABASE_URL=...
+#   fly deploy
+app = "notekeel-api"
+primary_region = "nrt"
+
+[build]
+  dockerfile = "Dockerfile"
+
+[env]
+  PORT = "8080"
+  VOYAGE_MODEL = "voyage-4-lite"
+  EMBEDDING_DIMENSIONS = "512"
+  SEARCH_MIN_SIMILARITY = "0.5"
+  # 前端網址，正式環境請改成自己的 Vercel domain
+  CORS_ALLOWED_ORIGINS = "https://notekeel.vercel.app"
+
+[http_service]
+  internal_port = 8080
+  force_https = true
+  auto_stop_machines = "suspend"
+  auto_start_machines = true
+  min_machines_running = 0
+
+  [[http_service.checks]]
+    grace_period = "5s"
+    interval = "30s"
+    method = "GET"
+    path = "/healthz"
+    timeout = "5s"
+
+[[vm]]
+  size = "shared-cpu-1x"
+  memory = "256mb"

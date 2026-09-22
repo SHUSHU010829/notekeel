@@ -1,0 +1,270 @@
+/* ── 設計 token ─────────────────────────────────────────
+   工具本身只有兩個動作：記錄、搜尋。版面維持單欄、留白大、
+   顏色只有一個強調色，讓輸入框永遠是畫面上最明顯的東西。  */
+:root {
+  --bg: #f7f7f5;
+  --surface: #ffffff;
+  --surface-muted: #f2f2ef;
+  --border: #e4e4e0;
+  --border-strong: #d4d4cf;
+  --text: #1b1b19;
+  --text-muted: #6b6b66;
+  --text-subtle: #9a9a94;
+  --accent: #2f6f4f;
+  --accent-text: #ffffff;
+  --accent-soft: #e6f0ea;
+  --danger: #a33a2b;
+  --danger-soft: #fbeceb;
+  --radius: 12px;
+  --shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #131413;
+    --surface: #1b1d1b;
+    --surface-muted: #212422;
+    --border: #2b2e2c;
+    --border-strong: #3b403d;
+    --text: #e9ebe9;
+    --text-muted: #9ba09c;
+    --text-subtle: #767b78;
+    --accent: #6cbd93;
+    --accent-text: #10241a;
+    --accent-soft: #1d2b24;
+    --danger: #f0a89e;
+    --danger-soft: #35201d;
+    --shadow: none;
+  }
+}
+
+* { box-sizing: border-box; }
+html, body { margin: 0; padding: 0; }
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Noto Sans TC',
+    'PingFang TC', 'Microsoft JhengHei', sans-serif;
+  font-size: 15px;
+  line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
+}
+
+a { color: inherit; text-decoration: none; }
+button, input, textarea { font: inherit; color: inherit; }
+
+/* ── 版面骨架 ──────────────────────────────────────── */
+.shell {
+  max-width: 680px;
+  margin: 0 auto;
+  padding: 0 16px calc(48px + env(safe-area-inset-bottom));
+}
+
+.topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 18px 0 20px;
+}
+
+.brand {
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+
+.brand span { color: var(--text-subtle); font-weight: 400; }
+
+.tabs {
+  display: inline-flex;
+  padding: 3px;
+  background: var(--surface-muted);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+}
+
+.tabs a {
+  padding: 5px 14px;
+  border-radius: 999px;
+  color: var(--text-muted);
+  font-size: 13px;
+}
+
+.tabs a[aria-current='page'] {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  color: var(--text);
+  font-weight: 500;
+}
+
+/* ── 記錄頁 ───────────────────────────────────────── */
+.composer {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  overflow: hidden;
+}
+
+.composer textarea {
+  display: block;
+  width: 100%;
+  min-height: 180px;
+  padding: 16px;
+  border: none;
+  background: transparent;
+  resize: vertical;
+  outline: none;
+}
+
+.composer textarea::placeholder { color: var(--text-subtle); }
+
+.composer:focus-within { border-color: var(--border-strong); }
+
+.composer-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 12px 10px 16px;
+  border-top: 1px solid var(--border);
+  background: var(--surface-muted);
+}
+
+.hint { color: var(--text-subtle); font-size: 12.5px; }
+
+.btn {
+  padding: 8px 18px;
+  border: 1px solid var(--border-strong);
+  border-radius: 999px;
+  background: var(--surface);
+  cursor: pointer;
+}
+
+.btn:hover:not(:disabled) { border-color: var(--text-subtle); }
+.btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+.btn.primary {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--accent-text);
+  font-weight: 500;
+}
+
+/* 送出後的提示，淡入後自行消失 */
+.flash {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 12px;
+  padding: 7px 14px;
+  border-radius: 999px;
+  background: var(--accent);
+  color: var(--accent-text);
+  font-size: 13px;
+  font-weight: 500;
+  animation: rise 160ms ease-out;
+}
+
+.flash::before { content: '✓'; }
+
+.flash.error {
+  background: var(--danger-soft);
+  color: var(--danger);
+  border: 1px solid currentColor;
+}
+
+.flash.error::before { content: '!'; }
+
+@keyframes rise {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: none; }
+}
+
+/* ── 搜尋頁 ───────────────────────────────────────── */
+.searchbar {
+  display: flex;
+  gap: 8px;
+}
+
+.searchbar input {
+  flex: 1;
+  min-width: 0;
+  padding: 11px 14px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  outline: none;
+}
+
+.searchbar input:focus { border-color: var(--border-strong); }
+
+/* ── 筆記列表 ─────────────────────────────────────── */
+.section-label {
+  margin: 28px 0 10px;
+  color: var(--text-muted);
+  font-size: 12.5px;
+}
+
+.notes { display: flex; flex-direction: column; gap: 8px; }
+
+.note {
+  padding: 14px 16px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+}
+
+.note.clickable { cursor: pointer; }
+.note.clickable:hover { border-color: var(--border-strong); }
+
+.note-text {
+  margin: 0;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.note-text.clamped {
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.note-meta {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 10px;
+  color: var(--text-subtle);
+  font-size: 12.5px;
+}
+
+.score {
+  padding: 1px 8px;
+  border-radius: 999px;
+  background: var(--accent-soft);
+  color: var(--accent);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+
+@media (prefers-color-scheme: dark) {
+  .score { color: var(--text); }
+}
+
+.empty {
+  padding: 40px 16px;
+  text-align: center;
+  color: var(--text-subtle);
+  font-size: 13.5px;
+}
+
+.error-text {
+  margin-top: 12px;
+  color: var(--danger);
+  font-size: 13.5px;
+}
