@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { resetLocalNotes } from '../../../lib/server/notes'
 import { GET, POST } from './route'
 import { POST as BULK } from './bulk/route'
+import { DELETE } from './[id]/route'
 import { GET as SEARCH } from './search/route'
 
 // 這些測試跑在「沒設定 Supabase」的本機模式：route handler 走記憶體存取層
@@ -84,6 +85,12 @@ describe('GET /api/notes/search', () => {
     expect(results[0].similarity).toBeGreaterThan(0)
   })
 
+  it('沒有 Voyage 金鑰時不做 rerank，回應標明 reranked=false', async () => {
+    await postNote('一則筆記')
+    const body = await (await SEARCH(new Request('http://localhost/api/notes/search?q=筆記'))).json()
+    expect(body.reranked).toBe(false)
+  })
+
   it('回應帶上這次實際套用的相似度下限', async () => {
     await postNote('一則筆記')
     const { minSimilarity } = await (
@@ -152,6 +159,41 @@ describe('POST /api/notes/bulk', () => {
     const response = await bulk(Array.from({ length: 101 }, (_, i) => `第 ${i} 則`))
     expect(response.status).toBe(400)
     expect((await response.json()).error).toContain('一次最多')
+  })
+})
+
+function removeNote(id: string) {
+  return DELETE(new Request(`http://localhost/api/notes/${id}`, { method: 'DELETE' }), {
+    params: Promise.resolve({ id }),
+  })
+}
+
+describe('DELETE /api/notes/:id', () => {
+  it('刪除成功回 204，之後列表就找不到了', async () => {
+    const created = await (await postNote('要被刪掉的筆記')).json()
+    await postNote('要留著的筆記')
+
+    const response = await removeNote(created.id)
+    expect(response.status).toBe(204)
+
+    const { notes } = await (await GET(new Request('http://localhost/api/notes'))).json()
+    expect(notes.map((note: { content: string }) => note.content)).toEqual(['要留著的筆記'])
+  })
+
+  it('刪不存在的筆記回 404', async () => {
+    const response = await removeNote('11111111-1111-4111-8111-111111111111')
+    expect(response.status).toBe(404)
+    expect((await response.json()).error).toBe('找不到這則筆記')
+  })
+
+  it('刪掉的筆記也不會再出現在搜尋結果', async () => {
+    const created = await (await postNote('獨一無二的關鍵內容')).json()
+    await removeNote(created.id)
+
+    const { results } = await (
+      await SEARCH(new Request('http://localhost/api/notes/search?q=獨一無二的關鍵內容'))
+    ).json()
+    expect(results).toHaveLength(0)
   })
 })
 

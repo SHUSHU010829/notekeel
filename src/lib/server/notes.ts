@@ -18,6 +18,8 @@ export interface NotesStore {
   createMany(items: NewNote[]): Promise<Note[]>
   search(embedding: number[], limit: number, minSimilarity: number): Promise<SearchHit[]>
   list(limit: number): Promise<Note[]>
+  /** 刪除自己的一則筆記；找不到（或不是自己的）回 false */
+  remove(id: string): Promise<boolean>
 }
 
 export class StoreError extends Error {}
@@ -77,6 +79,14 @@ export function createSupabaseNotes(client: SupabaseClient, ownerId: string): No
 
       if (error) throw storeError(error)
       return ((data ?? []) as RawNote[]).map(toNote)
+    },
+
+    async remove(id) {
+      // RLS 已經限定只能刪自己的；select 回傳空陣列即代表沒有這一筆
+      const { data, error } = await client.from('notes').delete().eq('id', id).select('id')
+
+      if (error) throw storeError(error)
+      return (data ?? []).length > 0
     },
   }
 }
@@ -152,6 +162,15 @@ export function createLocalNotes(ownerId: string): NotesStore {
         .map((record) => record.note)
         .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
         .slice(0, limit)
+    },
+
+    async remove(id) {
+      const index = localRecords.findIndex(
+        (record) => record.ownerId === ownerId && record.note.id === id,
+      )
+      if (index === -1) return false
+      localRecords.splice(index, 1)
+      return true
     },
   }
 }

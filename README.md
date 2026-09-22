@@ -4,9 +4,11 @@
 
 ```
 瀏覽器 ─► Next.js（頁面 + route handler，整包跑在 Vercel）
-              ├─► Voyage AI            文字 → 向量
+              ├─► Voyage AI            文字 → 向量、候選 → rerank
               └─► Supabase Postgres    原文 + 向量 + 時間（pgvector）
 ```
+
+搜尋是兩段式：先用向量從全部筆記粗篩出候選，再用 rerank 模型細排。
 
 帳號與資料庫與 [taskeel](https://github.com/SHUSHU010829/taskeel) 共用：同一個 Supabase
 專案、同一組 `auth.users`，用 Google 登入哪一邊都是同一個帳號。
@@ -38,6 +40,10 @@ embedder。整條流程（記錄 → 搜尋 → 顯示相似度）可以直接�
 | `NEXT_PUBLIC_SUPABASE_ANON_KEY` | 空 | 與 taskeel 相同的 publishable key |
 | `VOYAGE_API_KEY` | 空（假 embedder） | Voyage AI 金鑰，**伺服器端專用** |
 | `VOYAGE_MODEL` | `voyage-4-lite` | embedding 模型 |
+| `VOYAGE_RERANK_MODEL` | `rerank-2.5-lite` | rerank 模型；有金鑰就自動啟用 |
+| `SEARCH_RERANK` | 啟用 | 設 `false` 可關掉 rerank |
+| `SEARCH_CANDIDATES` | `30` | 進 rerank 的候選數量 |
+| `RERANK_MIN_SCORE` | `0`（不過濾） | rerank 分數下限；這個分數有校準，比相似度適合當門檻 |
 | `EMBEDDING_DIMENSIONS` | `512` | 需與 `notes.embedding` 的維度一致 |
 | `SEARCH_MIN_SIMILARITY` | `0`（不過濾） | 相似度下限，**先留 0**，再用下方的校準腳本量過決定 |
 
@@ -57,12 +63,17 @@ Next.js 專案），把上表的變數填進 Settings → Environment Variables 
 | `POST` | `/api/notes/bulk` | 一次匯入多則：`{"contents": ["…"]}`（上限 100 則，只用一次 Voyage 請求） |
 | `GET` | `/api/notes/search?q=...&limit=8` | 語意搜尋 → `{query, results:[{…, similarity}]}` |
 | `GET` | `/api/notes?limit=50` | 依時間新到舊列出 |
+| `DELETE` | `/api/notes/:id` | 刪除自己的一則筆記（成功 `204`，找不到 `404`）|
 
 `similarity` 是 0–1 的 cosine 相似度（1 最接近）。未登入回 `401`，
 錯誤一律回 `{"error": "可直接顯示的訊息", "detail": "底層錯誤"}`。
 
-搜尋可以用 `?min=0.3` 臨時覆寫相似度下限（不用改環境變數重新部署），
-回應裡的 `minSimilarity` 會告訴你這次實際套用的值。
+搜尋結果每則都有 `similarity`（向量 cosine），有跑 rerank 時還會有 `relevance`。
+回應的 `reranked` 說明這次有沒有真的跑到 rerank —— rerank 失敗（例如撞到 rate limit）
+時會自動退回向量排序，不會讓整個搜尋掛掉。
+
+校準用的臨時參數（不用改環境變數重新部署）：`?min=` 覆寫相似度下限、
+`?minRelevance=` 覆寫 rerank 門檻、`?rerank=false` 關掉 rerank 比較差異。
 
 **Voyage 的 rate limit**：免費方案沒綁付款方式時只有 3 RPM / 10K TPM，
 逐則匯入很快就會被限流（回 429）。批次匯入請走 `/api/notes/bulk`，
@@ -96,6 +107,9 @@ Next.js 專案），把上表的變數填進 Settings → Environment Variables 
    所以單一固定門檻切不乾淨 —— 排序本身比門檻可靠，預設維持 `0`。
 3. **查詢越完整分數越高**：兩個字的「想存錢」只有 0.18，
    完整句子的「怎麼沖咖啡不會苦」有 0.60。搜不到時先把話講長一點再試。
+
+這也是為什麼要有 rerank：cosine 分數切不乾淨的問題，交給專門判斷相關性的模型處理，
+它的分數才適合設絕對門檻（用 `?minRelevance=` 量過再寫進 `RERANK_MIN_SCORE`）。
 
 ## 程式結構
 
@@ -144,6 +158,9 @@ route handler 用的是**使用者自己的 session**（publishable key + cookie
 node scripts/seed.mjs                                  # 灌進本機跑著的 app
 VOYAGE_API_KEY=... node scripts/seed.mjs --sql --email you@example.com > seed.sql
 ```
+
+**清掉範例測資**：主控台貼 [`scripts/unseed-browser.js`](scripts/unseed-browser.js)，
+它只會刪掉內容與範例完全相同的筆記，你自己寫的不會被動到。
 
 `--sql` 會用 Voyage 算好向量再輸出 INSERT，貼進 SQL Editor 執行即可；
 它強制要金鑰，因為本機假 embedder 產生的向量與線上查詢不在同一個空間，灌進去會搜不準。

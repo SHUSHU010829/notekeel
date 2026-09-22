@@ -40,6 +40,17 @@ describe('本機記憶體存取層', () => {
     ])
   })
 
+  it('刪除只動得了自己的筆記', async () => {
+    const aliceNotes = createLocalNotes(alice)
+    const bobNotes = createLocalNotes(bob)
+    const aliceNote = await aliceNotes.create('Alice 的祕密', [1, 0, 0])
+
+    expect(await bobNotes.remove(aliceNote.id)).toBe(false)   // 別人刪不掉
+    expect(await aliceNotes.remove(aliceNote.id)).toBe(true)  // 自己刪得掉
+    expect(await aliceNotes.remove(aliceNote.id)).toBe(false) // 刪過就沒了
+    expect(await aliceNotes.list(10)).toHaveLength(0)
+  })
+
   it('列表依時間新到舊', async () => {
     const notes = createLocalNotes(alice)
     await notes.create('第一則', [1, 0, 0])

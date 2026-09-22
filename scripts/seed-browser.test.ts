@@ -6,17 +6,18 @@ import { describe, expect, it } from 'vitest'
  * 兩份檔案很容易改一邊忘了另一邊，這個測試把它們釘在一起。
  */
 describe('範例測資', () => {
-  it('瀏覽器版與 seed-notes.json 的內容一致', async () => {
-    const [json, browser] = await Promise.all([
-      readFile(new URL('./seed-notes.json', import.meta.url), 'utf8'),
-      readFile(new URL('./seed-browser.js', import.meta.url), 'utf8'),
-    ])
+  async function inlinedNotes(file: string): Promise<string[]> {
+    const source = await readFile(new URL(`./${file}`, import.meta.url), 'utf8')
+    return [...source.matchAll(/^ {4}"(.*)",$/gm)].map(([, text]) => JSON.parse(`"${text}"`))
+  }
 
-    const expected: string[] = JSON.parse(json)
-    const inlined = [...browser.matchAll(/^ {4}"(.*)",$/gm)].map(([, text]) =>
-      JSON.parse(`"${text}"`),
-    )
-
-    expect(inlined).toEqual(expected)
-  })
+  it.each(['seed-browser.js', 'unseed-browser.js'])(
+    '%s 與 seed-notes.json 的內容一致',
+    async (file) => {
+      const expected: string[] = JSON.parse(
+        await readFile(new URL('./seed-notes.json', import.meta.url), 'utf8'),
+      )
+      expect(await inlinedNotes(file)).toEqual(expected)
+    },
+  )
 })

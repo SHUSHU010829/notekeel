@@ -1,7 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { ApiError, createNote, listNotes, type Note } from '../lib/api'
+import { ApiError, createNote, deleteNote, listNotes, type Note } from '../lib/api'
 import { NoteCard } from '../components/NoteCard'
 
 /** 記錄頁：打開就能打字，Cmd/Ctrl + Enter 直接送出。 */
@@ -38,6 +38,21 @@ export default function ComposePage() {
     const timer = setTimeout(() => setFlash(null), 2600)
     return () => clearTimeout(timer)
   }, [flash])
+
+  const removeNote = useCallback(async (id: string) => {
+    const previous = recent
+    setRecent((notes) => notes.filter((note) => note.id !== id)) // 先從畫面移除，失敗再還原
+    try {
+      await deleteNote(id)
+      setFlash({ tone: 'ok', message: '已刪除' })
+    } catch (error) {
+      setRecent(previous)
+      setFlash({
+        tone: 'error',
+        message: error instanceof ApiError ? error.message : '刪除失敗，請稍後再試。',
+      })
+    }
+  }, [recent])
 
   const submit = useCallback(async () => {
     const trimmed = content.trim()
@@ -94,7 +109,7 @@ export default function ComposePage() {
       ) : (
         <div className="notes">
           {recent.map((note) => (
-            <NoteCard key={note.id} note={note} />
+            <NoteCard key={note.id} note={note} onDelete={removeNote} />
           ))}
         </div>
       )}

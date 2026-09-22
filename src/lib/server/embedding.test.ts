@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { EmbeddingError, embedLocally, embedWithVoyage } from './embedding'
+import { EmbeddingError, embedLocally, embedWithVoyage, rerankWithVoyage } from './embedding'
 
 const options = { apiKey: 'test-key', model: 'voyage-4-lite', baseUrl: 'https://voyage.test', dimensions: 2 }
 
@@ -100,5 +100,58 @@ describe('本機假 embedder', () => {
     expect(first).toHaveLength(64)
     expect(first).toEqual(second)
     expect(first.reduce((sum, value) => sum + value * value, 0)).toBeCloseTo(1)
+  })
+})
+
+describe('Voyage rerank', () => {
+  const rerankOptions = { apiKey: 'test-key', model: 'rerank-2.5-lite', baseUrl: 'https://voyage.test' }
+
+  it('送出 query 與候選文件，依分數由高到低回傳', async () => {
+    let captured: Record<string, unknown> = {}
+    mockFetch((init) => {
+      captured = JSON.parse(String(init.body))
+      return new Response(
+        JSON.stringify({
+          data: [
+            { index: 0, relevance_score: 0.12 },
+            { index: 2, relevance_score: 0.91 },
+            { index: 1, relevance_score: 0.44 },
+          ],
+        }),
+        { status: 200 },
+      )
+    })
+
+    const ranked = await rerankWithVoyage('節稅', ['貓砂', '深蹲', '報稅收據'], rerankOptions)
+
+    expect(captured).toMatchObject({
+      model: 'rerank-2.5-lite',
+      query: '節稅',
+      documents: ['貓砂', '深蹲', '報稅收據'],
+    })
+    expect(ranked.map((item) => item.index)).toEqual([2, 1, 0])
+    expect(ranked[0].score).toBe(0.91)
+  })
+
+  it('沒有候選時不打 API', async () => {
+    const spy = mockFetch(() => new Response('{}', { status: 200 }))
+    expect(await rerankWithVoyage('查詢', [], rerankOptions)).toEqual([])
+    expect(spy).not.toHaveBeenCalled()
+  })
+
+  it('被限流時拋出可辨識的錯誤', async () => {
+    mockFetch(() => new Response('{"detail":"3 RPM"}', { status: 429 }))
+    await expect(rerankWithVoyage('查詢', ['文件'], rerankOptions)).rejects.toThrow(/3 RPM/)
+  })
+
+  it('忽略超出範圍的 index', async () => {
+    mockFetch(() =>
+      new Response(
+        JSON.stringify({ data: [{ index: 9, relevance_score: 1 }, { index: 0, relevance_score: 0.5 }] }),
+        { status: 200 },
+      ),
+    )
+    const ranked = await rerankWithVoyage('查詢', ['只有一份文件'], rerankOptions)
+    expect(ranked).toEqual([{ index: 0, score: 0.5 }])
   })
 })

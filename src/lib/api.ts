@@ -20,7 +20,8 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
     throw new ApiError('連不上伺服器，請稍後再試。')
   }
 
-  const payload = await response.json().catch(() => null)
+  // 204 沒有內容
+  const payload = response.status === 204 ? null : await response.json().catch(() => null)
   if (!response.ok) {
     if (response.status === 401) throw new ApiError('登入已過期，請重新登入。')
     const message = payload && typeof payload.error === 'string' ? payload.error : `請求失敗（${response.status}）`
@@ -39,6 +40,11 @@ export async function searchNotes(query: string, limit = 8): Promise<SearchHit[]
   const params = new URLSearchParams({ q: query, limit: String(limit) })
   const data = await request<{ results: SearchHit[] | null }>(`/api/notes/search?${params}`)
   return data.results ?? []
+}
+
+/** 刪除一則筆記 */
+export async function deleteNote(id: string): Promise<void> {
+  await request<null>(`/api/notes/${id}`, { method: 'DELETE' })
 }
 
 /** 依時間列出筆記 */

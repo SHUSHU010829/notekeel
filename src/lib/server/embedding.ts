@@ -1,5 +1,12 @@
 import 'server-only'
-import { EMBEDDING_DIMENSIONS, VOYAGE_API_KEY, VOYAGE_BASE_URL, VOYAGE_MODEL, voyageEnabled } from './config'
+import {
+  EMBEDDING_DIMENSIONS,
+  VOYAGE_API_KEY,
+  VOYAGE_BASE_URL,
+  VOYAGE_MODEL,
+  VOYAGE_RERANK_MODEL,
+  voyageEnabled,
+} from './config'
 
 /** Voyage 會依用途調整向量：存檔用 document、查詢用 query。 */
 export type InputType = 'document' | 'query'
@@ -142,4 +149,63 @@ export function embedLocally(texts: string[], dimensions = EMBEDDING_DIMENSIONS)
 /** 有金鑰就用 Voyage，沒有就退回本機假 embedder。 */
 export function embed(texts: string[], inputType: InputType): Promise<number[][]> {
   return voyageEnabled ? embedWithVoyage(texts, inputType) : Promise.resolve(embedLocally(texts))
+}
+
+// ── Rerank ────────────────────────────────────────────────
+
+export interface RankedDocument {
+  /** 對應傳入 documents 的索引 */
+  index: number
+  /** 0–1，rerank 模型給的相關度（與 cosine 相似度不同，這個分數是校準過的） */
+  score: number
+}
+
+interface RerankOptions {
+  apiKey?: string
+  model?: string
+  baseUrl?: string
+}
+
+/**
+ * 用 Voyage 的 rerank 模型把候選重新排序。
+ *
+ * 向量搜尋負責「從全部筆記裡快速撈出可能相關的」，rerank 負責「這些之中誰真的相關」。
+ * 回傳依分數由高到低排序。
+ */
+export async function rerankWithVoyage(
+  query: string,
+  documents: string[],
+  options: RerankOptions = {},
+): Promise<RankedDocument[]> {
+  if (documents.length === 0) return []
+
+  const {
+    apiKey = VOYAGE_API_KEY,
+    model = VOYAGE_RERANK_MODEL,
+    baseUrl = VOYAGE_BASE_URL,
+  } = options
+
+  const response = await fetch(`${baseUrl}/v1/rerank`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
+    body: JSON.stringify({ model, query, documents }),
+  })
+
+  if (!response.ok) {
+    const detail = (await response.text().catch(() => '')).slice(0, 200)
+    const prefix =
+      response.status === 429
+        ? 'Voyage 限流（免費方案未綁付款方式只有 3 RPM）'
+        : `Voyage rerank 回應 ${response.status}`
+    throw new EmbeddingError(`${prefix}：${detail}`)
+  }
+
+  const payload = (await response.json()) as {
+    data?: { index: number; relevance_score: number }[]
+  }
+
+  return (payload.data ?? [])
+    .filter((item) => item.index >= 0 && item.index < documents.length)
+    .map((item) => ({ index: item.index, score: item.relevance_score }))
+    .sort((a, b) => b.score - a.score)
 }

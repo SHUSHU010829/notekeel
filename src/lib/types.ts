@@ -8,6 +8,8 @@ export interface Note {
 }
 
 export interface SearchHit extends Note {
-  /** 0–1，越大越相近 */
+  /** 向量的 cosine 相似度（0–1）；沒有校準，只適合用來排序 */
   similarity: number
+  /** rerank 模型給的相關度（0–1）；有校準，適合設絕對門檻。沒跑 rerank 時為 undefined */
+  relevance?: number
 }

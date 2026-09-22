@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { ApiError, searchNotes, type SearchHit } from '../../lib/api'
+import { ApiError, deleteNote, searchNotes, type SearchHit } from '../../lib/api'
 import { NoteCard } from '../../components/NoteCard'
 
 /** 搜尋頁：用印象中的說法找回筆記，用詞不同也沒關係。 */
@@ -28,6 +28,17 @@ export default function SearchPage() {
       setError(err instanceof ApiError ? err.message : '搜尋失敗，請稍後再試。')
     } finally {
       setSearching(false)
+    }
+  }
+
+  async function remove(id: string) {
+    const previous = results
+    setResults((hits) => hits?.filter((hit) => hit.id !== id) ?? null)
+    try {
+      await deleteNote(id)
+    } catch (err) {
+      setResults(previous)
+      setError(err instanceof ApiError ? err.message : '刪除失敗，請稍後再試。')
     }
   }
 
@@ -60,7 +71,7 @@ export default function SearchPage() {
           </h2>
           <div className="notes">
             {results.map((hit) => (
-              <NoteCard key={hit.id} note={hit} />
+              <NoteCard key={hit.id} note={hit} onDelete={remove} />
             ))}
           </div>
         </>

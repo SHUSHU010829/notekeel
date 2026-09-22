@@ -271,8 +271,8 @@ button, input, textarea { font: inherit; color: inherit; }
   box-shadow: var(--shadow);
 }
 
-.note.clickable { cursor: pointer; }
-.note.clickable:hover { border-color: var(--border-strong); }
+.note-body.clickable { cursor: pointer; }
+.note:hover { border-color: var(--border-strong); }
 
 .note-text {
   margin: 0;
@@ -290,11 +290,33 @@ button, input, textarea { font: inherit; color: inherit; }
 .note-meta {
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
   gap: 10px;
   margin-top: 10px;
   color: var(--text-subtle);
   font-size: 12.5px;
 }
+
+/* 刪除等操作靠右，平常低調、hover 才明顯 */
+.note-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin-left: auto;
+}
+
+.linklike {
+  padding: 0;
+  border: none;
+  background: none;
+  color: var(--text-subtle);
+  font-size: 12.5px;
+  cursor: pointer;
+}
+
+.linklike:hover { color: var(--text); }
+.linklike.danger { color: var(--danger); font-weight: 500; }
+.linklike:disabled { opacity: 0.5; cursor: not-allowed; }
 
 .score {
   padding: 1px 8px;
